@@ -69,9 +69,9 @@ body{font-family:'Spartan',sans-serif;background:var(--bg);color:var(--preto-sof
 .page{display:none;}
 .page.active{display:block;}
 
-/* DASHBOARD STATS — compact 6-col */
-.dash-kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:16px;}
-.kpi{background:var(--branco);border-radius:3px;padding:13px 14px;border-top:2px solid;cursor:pointer;transition:box-shadow .15s;}
+/* DASHBOARD STATS — compact 5-col */
+.dash-kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:16px;}
+.kpi{background:var(--branco);border-radius:3px;padding:13px 14px;border-top:2px solid;cursor:pointer;transition:box-shadow .15s;position:relative;}
 .kpi:hover{box-shadow:0 2px 12px rgba(0,0,0,.06);}
 .kpi.green{border-color:var(--emerald);}
 .kpi.amber{border-color:var(--amber);}
@@ -87,6 +87,8 @@ body{font-family:'Spartan',sans-serif;background:var(--bg);color:var(--preto-sof
 .kpi.warm .kpi-val{color:var(--warm-gray);}
 .kpi-sub{font-size:9px;color:var(--text-muted);margin-top:2px;letter-spacing:.03em;}
 .kpi-hint{font-size:8px;color:var(--oat);margin-top:3px;letter-spacing:.06em;}
+.kpi-eye{position:absolute;top:10px;right:10px;background:none;border:none;cursor:pointer;font-size:14px;opacity:.4;transition:opacity .2s;line-height:1;}
+.kpi-eye:hover{opacity:.9;}
 
 /* STATS (RT page) */
 .stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;}
@@ -263,23 +265,44 @@ tbody tr:hover{background:#FAFAF8;}
           <div><h1>Dashboard</h1><p id="dash-month"></p></div>
         </div>
         <div class="page-content">
-          <div class="dash-kpis" id="dash-kpis"><div class="loading" style="grid-column:span 6">Carregando...</div></div>
-          <div class="grid-2">
+          <!-- KPIs row: 5 cards -->
+          <div class="dash-kpis" id="dash-kpis"><div class="loading" style="grid-column:span 5">Carregando...</div></div>
+
+          <!-- Row 2: Fluxo + Projetos a Receber + RT -->
+          <div style="display:grid;grid-template-columns:2fr 1.5fr 1.2fr;gap:14px;margin-bottom:14px">
+            <!-- Fluxo de Caixa -->
             <div class="panel">
               <div class="panel-hd">
-                <span class="panel-title">Fluxo de Caixa — últimos 6 meses</span>
+                <span class="panel-title">Fluxo de Caixa</span>
                 <div style="display:flex;gap:12px;font-size:9px;color:var(--warm-gray);letter-spacing:.08em">
                   <span style="display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;background:var(--emerald);border-radius:1px;display:inline-block"></span>Entradas</span>
                   <span style="display:flex;align-items:center;gap:4px"><span style="width:7px;height:7px;background:var(--oat);border-radius:1px;display:inline-block"></span>Saídas</span>
                 </div>
               </div>
-              <div class="panel-bd"><div class="chart-area" id="dash-chart"></div></div>
+              <div class="panel-bd" id="dash-chart-wrap"></div>
             </div>
+            <!-- Projetos a Receber (scroll 10 linhas) -->
+            <div class="panel">
+              <div class="panel-hd"><span class="panel-title">Projetos a Receber</span></div>
+              <div style="max-height:200px;overflow-y:auto;padding:0 18px 14px" id="dash-proj-receber"></div>
+            </div>
+            <!-- RT a Receber -->
             <div class="panel">
               <div class="panel-hd"><span class="panel-title">RT a Receber</span></div>
-              <div class="panel-bd" id="dash-rt-list"><div class="loading">...</div></div>
+              <div class="panel-bd" id="dash-rt-list"></div>
             </div>
           </div>
+
+          <!-- Row 3: Custos próx 30 dias -->
+          <div class="panel">
+            <div class="panel-hd">
+              <span class="panel-title">⏱ Custos — próximos 30 dias</span>
+              <span id="dash-custos-total" style="font-family:'Libre Baskerville',serif;font-size:14px;color:var(--red)"></span>
+            </div>
+            <div class="panel-bd" id="dash-custos-30d"></div>
+          </div>
+
+          <!-- Detail panel (clicável dos KPIs) -->
           <div class="panel" id="dash-detail-panel" style="display:none">
             <div class="panel-hd">
               <span class="panel-title" id="dash-detail-title">Detalhe</span>
@@ -303,8 +326,10 @@ tbody tr:hover{background:#FAFAF8;}
             <button class="filter-btn" onclick="filterProjetos('Finalizado',this)">Finalizados</button>
             <button class="filter-btn" onclick="filterProjetos('Pausado',this)">Pausados</button>
             <button class="filter-btn" onclick="filterProjetos('Proposta',this)">Propostas</button>
+            <button class="filter-btn" onclick="filterProjetos('Resultado',this)" style="margin-left:auto;border-color:var(--emerald);color:var(--emerald)">⬡ Resultado p/ Projeto</button>
           </div>
           <div id="proj-table"><div class="loading">Carregando...</div></div>
+          <div id="proj-resultado" style="display:none"></div>
         </div>
       </div>
 
@@ -335,7 +360,7 @@ tbody tr:hover{background:#FAFAF8;}
           <div id="fin-saidas-wrap">
             <div class="tbl-wrap" style="margin-bottom:14px">
               <table>
-                <thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th>Conta</th><th>Sócia</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th>Vínculo</th><th>Conta</th><th>Sócia</th><th>Valor</th><th>Status</th><th></th></tr></thead>
                 <tbody id="fin-saidas-tbody"></tbody>
               </table>
             </div>
@@ -503,39 +528,148 @@ function closeDrawer(){
 // ═══════════════════════════════════════════════
 // DASHBOARD
 // ═══════════════════════════════════════════════
+let caixaVisivel = false  // começa oculto
+
+function toggleCaixa(){
+  caixaVisivel = !caixaVisivel
+  const el = document.getElementById('kpi-caixa-val')
+  const eye = document.getElementById('kpi-caixa-eye')
+  const caixa = F.length ? (F.slice().sort((a,b)=>b.mes_ano.localeCompare(a.mes_ano))[0]?.saldo_conta||0) : 0
+  if(el) el.textContent = caixaVisivel ? fmt(caixa) : '••••••'
+  if(eye) eye.textContent = caixaVisivel ? '👁' : '👁‍🗨'
+}
+
 function renderDashboard(){
-  const caixa = F[0]?.saldo_conta||0
+  // Pega o mês mais recente do fluxo (ordenado desc já vem do loadData)
+  const fluxoOrdenado = F.slice().sort((a,b)=>b.mes_ano.localeCompare(a.mes_ano))
+  const ultimoFluxo = fluxoOrdenado[0]
+  const caixa = ultimoFluxo?.saldo_conta||0
   document.getElementById('sidebar-caixa').textContent = fmt(caixa)
-  const rec = F[0]?.entrada_total||0
-  const ret = F[0]?.retiradas||0
+
+  const rec = ultimoFluxo?.entrada_total||0
+  const ret = ultimoFluxo?.retiradas||0
   const rtP = R.filter(r=>r.status==='A receber').reduce((a,r)=>a+(r.a_receber||0),0)
   const ativ = P.filter(p=>p.status==='Ativo').length
-  const inad = R.filter(r=>r.status==='Inadimplência').reduce((a,r)=>a+(r.valor_rt||0),0)
   const totalAreceber = P.reduce((a,p)=>a+(p.a_receber||0),0)
 
+  // KPIs — 5 cards, caixa começa oculto
   document.getElementById('dash-kpis').innerHTML = `
-    <div class="kpi green" onclick="dashDetail('caixa')"><div class="kpi-lbl">Caixa Atual</div><div class="kpi-val">${fmt(caixa)}</div><div class="kpi-sub">saldo conta</div></div>
-    <div class="kpi warm" onclick="dashDetail('receita')"><div class="kpi-lbl">Receita do Mês</div><div class="kpi-val">${fmt(rec)}</div><div class="kpi-sub">entradas mês atual</div><div class="kpi-hint">↗ clique p/ ver</div></div>
-    <div class="kpi amber" onclick="dashDetail('areceber')"><div class="kpi-lbl">Projetos a Receber</div><div class="kpi-val">${fmt(totalAreceber)}</div><div class="kpi-sub">contratos ativos</div><div class="kpi-hint">↗ clique p/ ver</div></div>
-    <div class="kpi blue" onclick="dashDetail('ativos')"><div class="kpi-lbl">Projetos Ativos</div><div class="kpi-val">${ativ}</div><div class="kpi-sub">em andamento</div><div class="kpi-hint">↗ clique p/ ver</div></div>
-    <div class="kpi warm" onclick="dashDetail('retiradas')"><div class="kpi-lbl">Retiradas / Mês</div><div class="kpi-val">${fmt(ret)}</div><div class="kpi-sub">Fer + Laís</div><div class="kpi-hint">↗ clique p/ ver</div></div>
-    <div class="kpi red" onclick="dashDetail('inadimplencia')"><div class="kpi-lbl">RT Inadimplente</div><div class="kpi-val">${fmt(inad)}</div><div class="kpi-sub">a verificar</div><div class="kpi-hint">↗ clique p/ ver</div></div>`
+    <div class="kpi green">
+      <button class="kpi-eye" id="kpi-caixa-eye" onclick="event.stopPropagation();toggleCaixa()" title="Mostrar/ocultar">👁‍🗨</button>
+      <div class="kpi-lbl">Caixa Atual</div>
+      <div class="kpi-val" id="kpi-caixa-val">••••••</div>
+      <div class="kpi-sub">saldo conta</div>
+    </div>
+    <div class="kpi warm" onclick="dashDetail('receita')">
+      <div class="kpi-lbl">Receita do Mês</div><div class="kpi-val">${fmt(rec)}</div>
+      <div class="kpi-sub">entradas mês atual</div><div class="kpi-hint">↗ clique p/ ver</div>
+    </div>
+    <div class="kpi amber" onclick="dashDetail('areceber')">
+      <div class="kpi-lbl">Projetos a Receber</div><div class="kpi-val">${fmt(totalAreceber)}</div>
+      <div class="kpi-sub">todos os contratos</div><div class="kpi-hint">↗ clique p/ ver</div>
+    </div>
+    <div class="kpi blue" onclick="dashDetail('ativos')">
+      <div class="kpi-lbl">Projetos Ativos</div><div class="kpi-val">${ativ}</div>
+      <div class="kpi-sub">em andamento</div><div class="kpi-hint">↗ clique p/ ver</div>
+    </div>
+    <div class="kpi amber" onclick="dashDetail('rt')">
+      <div class="kpi-lbl">RT a Receber</div><div class="kpi-val">${fmt(rtP)}</div>
+      <div class="kpi-sub">comissões pendentes</div><div class="kpi-hint">↗ clique p/ ver</div>
+    </div>`
 
-  // Chart
-  const meses = [...F].reverse().slice(-6)
-  const maxV = Math.max(...meses.map(m=>Math.max(m.entrada_total||0,m.saida_total||0)),1)
-  document.getElementById('dash-chart').innerHTML = meses.map(m=>{
-    const lbl = new Date(m.mes_ano+'T12:00:00').toLocaleDateString('pt-BR',{month:'short',year:'2-digit'})
-    const eH=Math.round(((m.entrada_total||0)/maxV)*72), sH=Math.round(((m.saida_total||0)/maxV)*72)
-    return `<div class="chart-col"><div class="chart-bars"><div class="bar bar-e" style="height:${eH}px" title="Entradas: ${fmt(m.entrada_total)}"></div><div class="bar bar-s" style="height:${sH}px" title="Saídas: ${fmt(m.saida_total)}"></div></div><div class="chart-lbl">${lbl}</div></div>`
-  }).join('')
+  // Fluxo de Caixa — chart SVG responsivo
+  const meses6 = fluxoOrdenado.slice(0,6).reverse()
+  if(meses6.length === 0){
+    document.getElementById('dash-chart-wrap').innerHTML = '<div class="empty">Sem dados de fluxo</div>'
+  } else {
+    const maxV = Math.max(...meses6.map(m=>Math.max(m.entrada_total||0, m.saida_total||0)), 1)
+    const barW = 18, gap = 8, grpW = barW*2+gap, padL=36, padB=28, padT=12, h=110
+    const totalW = padL + meses6.length*(grpW+16) + 16
+    const scaleY = v => padT + (h - padT - padB) * (1 - v/maxV)
+    const barH = v => Math.max(0, (h - padT - padB) * (v/maxV))
 
-  // RT pendente
-  const rtList = R.filter(r=>r.status==='A receber').slice(0,5)
+    let rects = '', labels = '', gridLines = ''
+    // Grid lines
+    for(let i=0;i<=4;i++){
+      const y = padT + (h-padT-padB)*i/4
+      const val = maxV*(1-i/4)
+      gridLines += `<line x1="${padL}" y1="${y}" x2="${totalW}" y2="${y}" stroke="#E2DED4" stroke-width="1"/>
+        <text x="${padL-4}" y="${y+3}" text-anchor="end" font-size="7" fill="#B6ADA5">${val>=1000?(val/1000).toFixed(0)+'k':val.toFixed(0)}</text>`
+    }
+
+    meses6.forEach((m,i)=>{
+      const x = padL + 8 + i*(grpW+16)
+      const eH = barH(m.entrada_total||0), sH = barH(m.saida_total||0)
+      const eY = scaleY(m.entrada_total||0), sY = scaleY(m.saida_total||0)
+      const lbl = new Date(m.mes_ano+'T12:00:00').toLocaleDateString('pt-BR',{month:'short',year:'2-digit'})
+      rects += `<rect x="${x}" y="${eY}" width="${barW}" height="${eH}" fill="#4A7C59" rx="2">
+          <title>Entradas ${lbl}: ${fmt(m.entrada_total)}</title></rect>
+        <rect x="${x+barW+2}" y="${sY}" width="${barW}" height="${sH}" fill="#D6D2C4" rx="2">
+          <title>Saídas ${lbl}: ${fmt(m.saida_total)}</title></rect>`
+      labels += `<text x="${x+barW}" y="${h-6}" text-anchor="middle" font-size="8" fill="#8C8278">${lbl}</text>`
+    })
+
+    document.getElementById('dash-chart-wrap').innerHTML = `
+      <svg width="100%" viewBox="0 0 ${totalW} ${h}" style="display:block">
+        ${gridLines}
+        <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${h-padB}" stroke="#DDD9D0" stroke-width="1"/>
+        ${rects}${labels}
+      </svg>`
+  }
+
+  // Projetos a Receber — lista scrollável
+  const comReceber = P.filter(p=>(p.a_receber||0)>0).sort((a,b)=>(b.a_receber||0)-(a.a_receber||0)).slice(0,10)
+  document.getElementById('dash-proj-receber').innerHTML = comReceber.length
+    ? comReceber.map(p=>`
+      <div class="row-item" style="padding:8px 0">
+        <div style="min-width:0;flex:1;padding-right:8px">
+          <div class="row-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nome_contrato}</div>
+          <div class="row-sub">${p.cliente} · ${badge(p.status)}</div>
+        </div>
+        <div style="text-align:right;white-space:nowrap">
+          <div style="font-family:'Libre Baskerville',serif;font-size:13px;color:var(--amber)">${fmt(p.a_receber)}</div>
+          ${contaBadge(p.conta)}
+        </div>
+      </div>`).join('')
+    : '<div class="empty" style="padding:24px">Nenhum pendente</div>'
+
+  // RT a Receber
+  const rtList = R.filter(r=>r.status==='A receber').slice(0,6)
+  const rtTotal = rtList.reduce((a,r)=>a+(r.a_receber||0),0)
   document.getElementById('dash-rt-list').innerHTML = rtList.length
-    ? rtList.map(r=>`<div class="row-item"><div><div class="row-name">${r.fornecedor||'—'}</div><div class="row-sub">${r.projeto} · ${r.categoria||''}</div></div><div class="row-right">${fmt(r.a_receber)} ${contaBadge(r.conta)}</div></div>`).join('')
-      + `<div style="margin-top:10px;padding-top:9px;border-top:1px solid var(--cool-gray);display:flex;justify-content:space-between;font-size:12px"><span style="color:var(--warm-gray)">Total</span><strong style="font-family:'Libre Baskerville',serif;color:var(--amber)">${fmt(rtP)}</strong></div>`
-    : '<div class="empty">Nenhuma RT pendente</div>'
+    ? rtList.map(r=>`<div class="row-item" style="padding:7px 0">
+        <div style="min-width:0;flex:1;padding-right:6px">
+          <div class="row-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.fornecedor||'—'}</div>
+          <div class="row-sub">${r.projeto}</div>
+        </div>
+        <div style="text-align:right;white-space:nowrap;font-family:'Libre Baskerville',serif;font-size:12px;color:var(--amber)">${fmt(r.a_receber)}</div>
+      </div>`).join('')
+      + `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--cool-gray);display:flex;justify-content:space-between;font-size:11px"><span style="color:var(--warm-gray)">Total</span><strong style="font-family:'Libre Baskerville',serif;color:var(--amber)">${fmt(rtTotal)}</strong></div>`
+    : '<div class="empty" style="padding:24px">Nenhuma RT pendente</div>'
+
+  // Custos próximos 30 dias
+  const hoje = new Date()
+  const em30 = new Date(); em30.setDate(hoje.getDate()+30)
+  const custos30 = S.filter(s=>{
+    if(!s.data_pagamento) return false
+    const d = new Date(s.data_pagamento+'T12:00:00')
+    return d>=hoje && d<=em30 && s.status!=='Pago'
+  }).sort((a,b)=>a.data_pagamento.localeCompare(b.data_pagamento))
+  const totalCustos = custos30.reduce((a,s)=>a+(s.valor||0),0)
+  document.getElementById('dash-custos-total').textContent = fmt(totalCustos)
+  document.getElementById('dash-custos-30d').innerHTML = custos30.length
+    ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">${custos30.map(s=>`
+        <div style="border:1px solid var(--border);border-radius:3px;padding:11px 13px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--preto-soft)">${s.descricao||s.tipo_saida}</div>
+            <div style="font-size:10px;color:var(--warm-gray);margin-top:2px">${fmtD(s.data_pagamento)} · ${s.tipo_saida}</div>
+          </div>
+          <div style="text-align:right;white-space:nowrap">
+            <div style="font-family:'Libre Baskerville',serif;font-size:13px;color:var(--red)">${fmt(s.valor)}</div>
+            ${s.socia?`<div style="font-size:9px;color:var(--warm-gray)">${s.socia}</div>`:''}
+          </div>
+        </div>`).join('')}</div>`
+    : '<div class="empty">Nenhum custo previsto para os próximos 30 dias</div>'
 }
 
 function dashDetail(type){
@@ -566,15 +700,15 @@ function dashDetail(type){
     const mes = mesAtual()
     const entMes = E.filter(e=>e.mes_ano===mes)
     body.innerHTML = entMes.length ? `<table style="width:100%;border-collapse:collapse">${entMes.map(e=>`<tr style="border-bottom:1px solid var(--bg)"><td style="padding:9px 0;font-size:11px;color:var(--warm-gray)">${fmtD(e.data_pagamento)}</td><td style="font-weight:600;font-size:12px">${e.nome_contrato||e.cliente||'—'}</td><td>${badge(e.tipo_entrada||'—')}</td><td>${contaBadge(e.conta)}</td><td style="text-align:right;font-family:'Libre Baskerville',serif;color:var(--emerald)">${fmt(e.valor)}</td></tr>`).join('')}</table>` : '<div class="empty">Sem entradas no mês atual</div>'
+  } else if(type==='rt'){
+    title.textContent = 'RT a Receber — Detalhado'
+    const rtAll = R.filter(r=>r.status==='A receber').sort((a,b)=>(b.a_receber||0)-(a.a_receber||0))
+    body.innerHTML = rtAll.length ? `<table style="width:100%;border-collapse:collapse">${rtAll.map(r=>`<tr style="border-bottom:1px solid var(--bg)"><td style="padding:9px 0;font-weight:600;font-size:12px">${r.projeto}</td><td style="color:var(--warm-gray);font-size:11px">${r.fornecedor||'—'}</td><td>${badge(r.categoria||'—')}</td><td>${contaBadge(r.conta)}</td><td style="text-align:right;font-family:'Libre Baskerville',serif;color:var(--amber)">${fmt(r.a_receber)}</td></tr>`).join('')}</table>` : '<div class="empty">Nenhuma RT pendente</div>'
   } else if(type==='retiradas'){
     title.textContent = 'Retiradas do Mês Atual'
     const mes = mesAtual()
     const ret = S.filter(s=>s.mes_ano===mes&&['retirada de lucros','pró-labore'].includes(s.tipo_saida))
     body.innerHTML = ret.length ? `<table style="width:100%;border-collapse:collapse">${ret.map(s=>`<tr style="border-bottom:1px solid var(--bg)"><td style="padding:9px 0;font-size:11px;color:var(--warm-gray)">${fmtD(s.data_pagamento)}</td><td style="font-weight:600;font-size:12px">${s.descricao}</td><td>${s.socia||'—'}</td><td style="text-align:right;font-family:'Libre Baskerville',serif;color:var(--red)">${fmt(s.valor)}</td></tr>`).join('')}</table>` : '<div class="empty">Sem retiradas no mês atual</div>'
-  } else if(type==='inadimplencia'){
-    title.textContent = 'RT em Inadimplência'
-    const inad = R.filter(r=>r.status==='Inadimplência')
-    body.innerHTML = inad.length ? `<table style="width:100%;border-collapse:collapse">${inad.map(r=>`<tr style="border-bottom:1px solid var(--bg)"><td style="padding:9px 0;font-weight:600;font-size:12px">${r.projeto}</td><td style="color:var(--warm-gray);font-size:11px">${r.fornecedor||'—'} · ${r.categoria||''}</td><td style="text-align:right;font-family:'Libre Baskerville',serif;color:var(--red)">${fmt(r.valor_rt)}</td></tr>`).join('')}</table>` : '<div class="empty">Nenhuma inadimplência</div>'
   }
 }
 
@@ -586,10 +720,18 @@ function filterProjetos(f,btn){
   pFilter=f
   document.querySelectorAll('#page-projetos .filter-btn').forEach(b=>b.classList.remove('active'))
   btn.classList.add('active')
-  renderProjetos()
+  if(f==='Resultado'){
+    document.getElementById('proj-table').style.display='none'
+    document.getElementById('proj-resultado').style.display='block'
+    renderResultado()
+  } else {
+    document.getElementById('proj-table').style.display='block'
+    document.getElementById('proj-resultado').style.display='none'
+    renderProjetos()
+  }
 }
 function renderProjetos(){
-  const data = pFilter==='Todos' ? P : P.filter(p=>p.status===pFilter)
+  const data = pFilter==='Todos'||pFilter==='Resultado' ? P : P.filter(p=>p.status===pFilter)
   document.getElementById('proj-count').textContent = `${data.length} contratos`
   if(!data.length){document.getElementById('proj-table').innerHTML='<div class="empty">Nenhum projeto encontrado</div>';return}
   document.getElementById('proj-table').innerHTML = `<div class="tbl-wrap"><table>
@@ -608,6 +750,86 @@ function renderProjetos(){
       <td style="white-space:nowrap"><button class="btn-edit" onclick="editItem('projeto',${p.id})">Editar</button></td>
     </tr>`).join('')}</tbody>
   </table></div>`
+}
+
+function renderResultado(){
+  // Projetos ativos para rateio
+  const ativos = P.filter(p=>p.status==='Ativo')
+  const nAtivos = ativos.length || 1
+
+  // Saídas gerais (sem contrato) — apenas tipos de custo operacional, excluindo retiradas/pro-labore
+  const tiposOperacionais = ['projeto despesa','escritório despesa','marketing','honorários','imposto']
+  const saidasGerais = S.filter(s => !s.contrato_id && tiposOperacionais.includes(s.tipo_saida) && s.status==='Pago')
+  const totalGeral = saidasGerais.reduce((a,s)=>a+(s.valor||0),0)
+  const rateioUnitario = totalGeral / nAtivos
+
+  // Por projeto: entradas + RT recebidas - saídas diretas - rateio geral
+  const resultado = P.map(p => {
+    const entradas = E.filter(e=>e.contrato_id===p.id||e.nome_contrato===p.nome_contrato).reduce((a,e)=>a+(e.valor||0),0)
+    const rtRecebida = R.filter(r=>(r.projeto===p.nome_contrato||r.projeto===p.projeto)&&r.status==='Pago').reduce((a,r)=>a+(r.valor_rt||0),0)
+    const saidasDiretas = S.filter(s=>s.contrato_id===p.id && tiposOperacionais.includes(s.tipo_saida) && s.status==='Pago').reduce((a,s)=>a+(s.valor||0),0)
+    const rateio = p.status==='Ativo' ? rateioUnitario : 0
+    const receita = entradas + rtRecebida
+    const custos = saidasDiretas + rateio
+    const resultado = receita - custos
+    const margem = receita > 0 ? (resultado/receita*100) : 0
+    return {...p, entradas, rtRecebida, saidasDiretas, rateio, receita, custos, resultado, margem}
+  }).filter(p=>p.receita>0||p.valor_contrato>0).sort((a,b)=>b.resultado-a.resultado)
+
+  document.getElementById('proj-resultado').innerHTML = `
+    <div class="panel" style="margin-bottom:14px">
+      <div class="panel-hd">
+        <span class="panel-title">Rateio de custos gerais</span>
+        <span style="font-size:11px;color:var(--warm-gray)">${fmt(totalGeral)} ÷ ${nAtivos} projetos ativos = <strong style="color:var(--preto-soft)">${fmt(rateioUnitario)} / projeto</strong></span>
+      </div>
+      <div class="panel-bd" style="font-size:11px;color:var(--warm-gray);line-height:1.8">
+        Saídas gerais consideradas: escritório, marketing, honorários, impostos e despesas gerais marcadas como <em>Geral</em> e pagas.
+        Saídas vinculadas a contratos específicos são atribuídas diretamente ao projeto.
+      </div>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr>
+        <th>Projeto</th><th>Status</th>
+        <th style="text-align:right">Entradas</th>
+        <th style="text-align:right">RT Recebida</th>
+        <th style="text-align:right">Receita Total</th>
+        <th style="text-align:right">Custos Diretos</th>
+        <th style="text-align:right">Rateio Geral</th>
+        <th style="text-align:right">Custos Total</th>
+        <th style="text-align:right">Resultado</th>
+        <th style="text-align:right">Margem</th>
+      </tr></thead>
+      <tbody>
+        ${resultado.map(p=>{
+          const cor = p.resultado>=0 ? 'var(--emerald)' : 'var(--red)'
+          return `<tr onclick="showProjetoDrawer(${p.id})" style="cursor:pointer">
+            <td class="td-bold">${p.nome_contrato}</td>
+            <td>${badge(p.status)}</td>
+            <td class="td-money" style="text-align:right">${fmt(p.entradas)}</td>
+            <td class="td-money" style="text-align:right;color:var(--amber)">${fmt(p.rtRecebida)}</td>
+            <td class="td-money td-bold" style="text-align:right">${fmt(p.receita)}</td>
+            <td class="td-money" style="text-align:right;color:var(--red)">${fmt(p.saidasDiretas)}</td>
+            <td class="td-money" style="text-align:right;color:var(--warm-gray)">${p.rateio>0?fmt(p.rateio):'—'}</td>
+            <td class="td-money" style="text-align:right;color:var(--red)">${fmt(p.custos)}</td>
+            <td class="td-money td-bold" style="text-align:right;color:${cor}">${p.resultado>=0?'+':''}${fmt(p.resultado)}</td>
+            <td style="text-align:right">
+              <span style="font-family:'Libre Baskerville',serif;font-size:13px;color:${cor}">${p.margem.toFixed(1)}%</span>
+              <div class="prog" style="margin-top:3px;width:60px;display:inline-block"><div class="prog-fill" style="width:${Math.min(Math.abs(p.margem),100)}%;background:${cor}"></div></div>
+            </td>
+          </tr>`}).join('')}
+        <tr style="background:var(--bg);font-weight:700">
+          <td colspan="2" style="padding:11px 14px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--warm-gray)">Total</td>
+          <td class="td-money td-bold" style="text-align:right">${fmt(resultado.reduce((a,p)=>a+p.entradas,0))}</td>
+          <td class="td-money" style="text-align:right;color:var(--amber)">${fmt(resultado.reduce((a,p)=>a+p.rtRecebida,0))}</td>
+          <td class="td-money td-bold" style="text-align:right">${fmt(resultado.reduce((a,p)=>a+p.receita,0))}</td>
+          <td class="td-money" style="text-align:right;color:var(--red)">${fmt(resultado.reduce((a,p)=>a+p.saidasDiretas,0))}</td>
+          <td class="td-money" style="text-align:right;color:var(--warm-gray)">${fmt(totalGeral)}</td>
+          <td class="td-money" style="text-align:right;color:var(--red)">${fmt(resultado.reduce((a,p)=>a+p.custos,0))}</td>
+          <td class="td-money td-bold" style="text-align:right;color:var(--emerald)">${fmt(resultado.reduce((a,p)=>a+p.resultado,0))}</td>
+          <td></td>
+        </tr>
+      </tbody>
+    </table></div>`
 }
 
 function showProjetoDrawer(id){
@@ -665,12 +887,13 @@ function renderFinanceiro(){
     <td class="td-muted">${fmtD(s.data_pagamento)}</td>
     <td class="td-bold">${s.descricao||'—'}</td>
     <td>${badge(s.tipo_saida||'—')}</td>
+    <td>${s.nome_contrato ? `<span style="font-size:10px;color:var(--blue);font-weight:600">${s.nome_contrato}</span>` : `<span class="td-muted">Geral</span>`}</td>
     <td>${contaBadge(s.conta)}</td>
     <td class="td-muted">${s.socia||'—'}</td>
     <td class="td-money td-red">${fmt(s.valor)}</td>
     <td>${badge(s.status)}</td>
     <td><button class="btn-edit" onclick="editItem('saida',${s.id})">Editar</button></td>
-  </tr>`).join('') || '<tr><td colspan="8" class="empty">Nenhuma saída</td></tr>'
+  </tr>`).join('') || '<tr><td colspan="9" class="empty">Nenhuma saída</td></tr>'
 
   document.getElementById('fin-fluxo-tbody').innerHTML = F.map(m=>{
     const fl=(m.entrada_total||0)-(m.saida_total||0)
@@ -843,6 +1066,11 @@ function preenchModal(type, data){
     set('m-tipo',data.tipo_saida); set('m-desc',data.descricao); set('m-valor',data.valor)
     set('m-data',data.data_pagamento); set('m-conta',data.conta); set('m-socia',data.socia)
     set('m-status',data.status); set('m-mes',data.mes_ano)
+    // Set vínculo
+    if(data.contrato_id){
+      const el = document.getElementById('m-vinculo')
+      if(el){ const opt = [...el.options].find(o=>o.value.startsWith(data.contrato_id+'|')); if(opt) el.value=opt.value }
+    }
     const btn=document.getElementById('modal-save-btn')
     if(btn) btn.onclick=()=>saveSaida(data.id)
   } else if(type==='rt'){
@@ -902,10 +1130,13 @@ function mEntrada(d=null){
 }
 
 function mSaida(d=null){
+  const opts = P.map(p=>`<option value="${p.id}|${p.nome_contrato}">${p.nome_contrato}</option>`).join('')
+  const vincAtual = d?.contrato_id ? `${d.contrato_id}|${d.nome_contrato}` : ''
   return `<h3>${d?'Editar Saída':'Nova Saída'}</h3><div class="modal-divider"></div>
   <div class="mg">
     ${fld('Tipo de Saída',sel('m-tipo',['retirada de lucros','pró-labore','projeto despesa','escritório despesa','marketing','honorários','imposto']))}
     ${fld('Descrição','<input id="m-desc">')}
+    ${fld('Vínculo',`<select id="m-vinculo"><option value="">Geral (rateado)</option>${opts}</select>`)}
     ${fld('Valor (R$)','<input id="m-valor" type="number" step="0.01">')}
     ${fld('Data Pagamento','<input id="m-data" type="date">')}
     ${fld('Conta',sel('m-conta',[{v:'pessoal',l:'PF (pessoal)'},{v:'jurídica',l:'PJ (jurídica)'}]))}
@@ -985,10 +1216,14 @@ async function saveEntrada(id){
 }
 
 async function saveSaida(id){
+  const vinculo = g('m-vinculo') || ''
+  const [cid, cnome] = vinculo ? vinculo.split('|') : [null, null]
   const payload = {
     tipo_saida:g('m-tipo'), descricao:g('m-desc'), valor:parseFloat(g('m-valor'))||0,
     data_pagamento:g('m-data')||null, conta:g('m-conta'), socia:g('m-socia')||null,
-    status:g('m-status'), mes_ano:g('m-mes')
+    status:g('m-status'), mes_ano:g('m-mes'),
+    contrato_id: cid ? parseInt(cid) : null,
+    nome_contrato: cnome || null
   }
   const {error} = id
     ? await db.from('saidas').update(payload).eq('id',id)

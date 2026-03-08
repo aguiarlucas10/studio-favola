@@ -315,8 +315,8 @@ tbody tr:hover{background:#FAFAF8;}
             </div>
           </div>
 
-          <!-- Row 3: A receber por tipo + Custos 30 dias -->
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
+          <!-- Row 3: A receber por tipo + A Receber 30 dias + Custos 30 dias -->
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px">
 
             <!-- A Receber por tipo de serviço -->
             <div class="panel">
@@ -331,6 +331,15 @@ tbody tr:hover{background:#FAFAF8;}
                 <span id="dash-custos-total" style="font-family:'Libre Baskerville',serif;font-size:13px;color:var(--red)"></span>
               </div>
               <div style="max-height:260px;overflow-y:auto" id="dash-custos-30d"></div>
+            </div>
+
+            <!-- A Receber próximos 30 dias -->
+            <div class="panel">
+              <div class="panel-hd">
+                <span class="panel-title">📥 A Receber — próximos 30 dias</span>
+                <span id="dash-areceber-total" style="font-family:'Libre Baskerville',serif;font-size:13px;color:var(--emerald)"></span>
+              </div>
+              <div style="max-height:260px;overflow-y:auto" id="dash-areceber-30d"></div>
             </div>
 
           </div>
@@ -762,7 +771,7 @@ function renderDashboard(){
   // A Receber por tipo de serviço
   const tiposServico = {}
   P.filter(p=>(p.a_receber||0)>0).forEach(p=>{
-    const tipo = p.tipologia || p.servico || 'Outros'
+    const tipo = p.servico || 'Outros'
     if(!tiposServico[tipo]) tiposServico[tipo] = {total:0, projetos:[]}
     tiposServico[tipo].total += p.a_receber||0
     tiposServico[tipo].projetos.push(p)
@@ -814,6 +823,25 @@ function renderDashboard(){
           <div style="font-family:'Libre Baskerville',serif;font-size:13px;color:var(--red);white-space:nowrap">${fmt(s.valor)}</div>
         </div>`).join('')
     : '<div class="empty" style="padding:20px">Nenhum custo previsto nos próximos 30 dias</div>'
+
+  // A Receber próximos 30 dias — entradas com data_pagamento futura e status A Receber
+  const areceber30 = E.filter(e=>{
+    if(!e.data_pagamento) return false
+    const d = new Date(e.data_pagamento+'T12:00:00')
+    return d>=hoje && d<=em30 && e.status!=='Pago'
+  }).sort((a,b)=>a.data_pagamento.localeCompare(b.data_pagamento))
+  const totalAreceber30 = areceber30.reduce((a,e)=>a+(e.valor||0),0)
+  document.getElementById('dash-areceber-total').textContent = fmt(totalAreceber30)
+  document.getElementById('dash-areceber-30d').innerHTML = areceber30.length
+    ? areceber30.map(e=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 18px;border-bottom:1px solid var(--cool-gray)">
+          <div style="min-width:0;flex:1;padding-right:12px">
+            <div style="font-size:11px;font-weight:600;color:var(--preto-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.nome_contrato||e.cliente||'—'}</div>
+            <div style="font-size:9px;color:var(--warm-gray);margin-top:2px">${fmtD(e.data_pagamento)} · ${e.tipo_entrada||''}${e.conta?' · '+contaBadge(e.conta):''}</div>
+          </div>
+          <div style="font-family:'Libre Baskerville',serif;font-size:13px;color:var(--emerald);white-space:nowrap">${fmt(e.valor)}</div>
+        </div>`).join('')
+    : '<div class="empty" style="padding:20px">Nenhum recebimento previsto nos próximos 30 dias</div>'
 }
 
 // ═══════════════════════════════════════════════

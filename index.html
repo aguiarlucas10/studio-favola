@@ -420,12 +420,17 @@ tbody tr:hover{background:#FAFAF8;}
             </div>
           </div>
 
-          <div class="filter-bar" id="fin-filter-bar">
+          <div class="filter-bar" id="fin-filter-bar" style="flex-wrap:wrap;gap:6px">
             <button class="filter-btn active" onclick="filterFin('Todos',this)">Todos</button>
             <button class="filter-btn" onclick="filterFin('entradas',this)">Entradas</button>
             <button class="filter-btn" onclick="filterFin('saidas',this)">Saídas</button>
             <button class="filter-btn" onclick="filterFin('fluxo',this)">Fluxo Mensal</button>
-            <button class="filter-btn" onclick="filterFin('contas',this)" style="margin-left:auto;border-color:var(--blue);color:var(--blue)">🏦 Contas</button>
+            <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
+              <select id="fin-mes-filtro" onchange="renderFinanceiro()" style="padding:6px 10px;border:1px solid var(--border);border-radius:3px;font-family:'Spartan',sans-serif;font-size:11px;letter-spacing:.04em;background:var(--branco);color:var(--preto-soft);cursor:pointer">
+                <option value="">Todos os meses</option>
+              </select>
+              <button class="filter-btn" onclick="filterFin('contas',this)" style="border-color:var(--blue);color:var(--blue);margin-left:0">🏦 Contas</button>
+            </div>
           </div>
 
           <!-- Contas bancárias (oculto por padrão) -->
@@ -1160,7 +1165,26 @@ function filterFin(f,btn){
 }
 
 function renderFinanceiro(){
-  document.getElementById('fin-entradas-tbody').innerHTML = E.map(e=>`<tr>
+  // Popula o seletor de meses com todos os meses disponíveis
+  const sel = document.getElementById('fin-mes-filtro')
+  const mesSelecionado = sel ? sel.value : ''
+  const todosMesesDisp = [...new Set([...E, ...S].map(r=>r.mes_ano).filter(Boolean))]
+    .sort((a,b)=>{ const [ma,ya]=a.split('/').map(Number); const [mb,yb]=b.split('/').map(Number); return (yb-ya)||(mb-ma) })
+  if(sel && sel.options.length <= 1){
+    todosMesesDisp.forEach(m=>{
+      const [mm,yy] = m.split('/')
+      const label = new Date(yy, mm-1, 1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'})
+      const opt = document.createElement('option')
+      opt.value = m; opt.textContent = label
+      sel.appendChild(opt)
+    })
+  }
+
+  // Filtra E e S pelo mês selecionado (se houver)
+  const Ef = mesSelecionado ? E.filter(e=>e.mes_ano===mesSelecionado) : E
+  const Sf = mesSelecionado ? S.filter(s=>s.mes_ano===mesSelecionado) : S
+
+  document.getElementById('fin-entradas-tbody').innerHTML = Ef.map(e=>`<tr>
     <td><input type="checkbox" class="cb-row" data-table="entradas" data-id="${e.id}" onchange="onCheckChange()"></td>
     <td class="td-muted">${fmtD(e.data_pagamento)}</td>
     <td class="td-bold">${e.nome_contrato||'—'}</td>
@@ -1173,7 +1197,7 @@ function renderFinanceiro(){
     <td><button class="btn-edit" onclick="editItem('entrada',${e.id})">Editar</button></td>
   </tr>`).join('') || '<tr><td colspan="10" class="empty">Nenhuma entrada</td></tr>'
 
-  document.getElementById('fin-saidas-tbody').innerHTML = S.map(s=>`<tr>
+  document.getElementById('fin-saidas-tbody').innerHTML = Sf.map(s=>`<tr>
     <td><input type="checkbox" class="cb-row" data-table="saidas" data-id="${s.id}" onchange="onCheckChange()"></td>
     <td class="td-muted">${fmtD(s.data_pagamento)}</td>
     <td class="td-bold">${s.descricao||'—'}</td>

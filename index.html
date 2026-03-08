@@ -213,6 +213,32 @@ tbody tr:hover{background:#FAFAF8;}
 .drawer-val{font-weight:600;color:var(--preto-soft);text-align:right;}
 
 .loading{text-align:center;padding:36px;color:var(--warm-gray);font-size:12px;letter-spacing:.08em;}
+
+/* CHECKBOX + BULK ACTIONS */
+.cb-row{width:16px;height:16px;cursor:pointer;accent-color:var(--preto);}
+.bulk-bar{display:none;position:sticky;bottom:0;left:0;right:0;background:var(--preto);color:var(--branco);padding:12px 20px;border-radius:4px 4px 0 0;align-items:center;justify-content:space-between;z-index:60;margin:0 -28px;}
+.bulk-bar.visible{display:flex;}
+.bulk-count{font-size:11px;letter-spacing:.1em;font-weight:600;}
+.bulk-actions{display:flex;gap:8px;}
+.btn-bulk{padding:7px 16px;border-radius:3px;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;font-family:'Spartan',sans-serif;border:none;transition:all .15s;}
+.btn-bulk-del{background:var(--red);color:var(--branco);}
+.btn-bulk-del:hover{background:#7a2f2f;}
+.btn-bulk-status{background:#3a3a3a;color:var(--branco);}
+.btn-bulk-status:hover{background:#555;}
+.btn-bulk-cancel{background:transparent;color:var(--cool-gray);border:1px solid #555 !important;}
+.btn-bulk-cancel:hover{background:#222;}
+
+/* DELETE button in modal */
+.btn-delete{padding:9px 18px;background:none;color:var(--red);border:1px solid var(--red-light);font-family:'Spartan',sans-serif;font-size:10px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;border-radius:3px;transition:all .2s;}
+.btn-delete:hover{background:var(--red);color:var(--branco);}
+
+/* Confirm dialog */
+.confirm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:300;align-items:center;justify-content:center;}
+.confirm-overlay.open{display:flex;}
+.confirm-box{background:var(--branco);border-radius:4px;padding:28px 32px;width:380px;text-align:center;}
+.confirm-box h4{font-family:'Libre Baskerville',serif;font-size:17px;margin-bottom:8px;color:var(--preto);}
+.confirm-box p{font-size:12px;color:var(--warm-gray);margin-bottom:22px;line-height:1.6;}
+.confirm-actions{display:flex;gap:10px;justify-content:center;}
 </style>
 </head>
 <body>
@@ -352,7 +378,7 @@ tbody tr:hover{background:#FAFAF8;}
           <div id="fin-entradas-wrap">
             <div class="tbl-wrap" style="margin-bottom:14px">
               <table>
-                <thead><tr><th>Data</th><th>Contrato</th><th>Cliente</th><th>Tipo</th><th>Conta</th><th>Forma</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th><input type="checkbox" class="cb-row" onchange="toggleAll('entradas',this)"></th><th>Data</th><th>Contrato</th><th>Cliente</th><th>Tipo</th><th>Conta</th><th>Forma</th><th>Valor</th><th>Status</th><th></th></tr></thead>
                 <tbody id="fin-entradas-tbody"></tbody>
               </table>
             </div>
@@ -360,7 +386,7 @@ tbody tr:hover{background:#FAFAF8;}
           <div id="fin-saidas-wrap">
             <div class="tbl-wrap" style="margin-bottom:14px">
               <table>
-                <thead><tr><th>Data</th><th>Descrição</th><th>Tipo</th><th>Vínculo</th><th>Conta</th><th>Sócia</th><th>Valor</th><th>Status</th><th></th></tr></thead>
+                <thead><tr><th><input type="checkbox" class="cb-row" onchange="toggleAll('saidas',this)"></th><th>Data</th><th>Descrição</th><th>Tipo</th><th>Vínculo</th><th>Conta</th><th>Sócia</th><th>Valor</th><th>Status</th><th></th></tr></thead>
                 <tbody id="fin-saidas-tbody"></tbody>
               </table>
             </div>
@@ -411,6 +437,36 @@ tbody tr:hover{background:#FAFAF8;}
       </div>
 
     </div>
+  </div>
+</div>
+
+<!-- CONFIRM DIALOG -->
+<div class="confirm-overlay" id="confirm-overlay">
+  <div class="confirm-box">
+    <h4 id="confirm-title">Confirmar exclusão</h4>
+    <p id="confirm-msg">Esta ação não pode ser desfeita.</p>
+    <div class="confirm-actions">
+      <button class="btn-cancel" onclick="confirmReject()">Cancelar</button>
+      <button class="btn-delete" id="confirm-ok" onclick="confirmAccept()">Apagar</button>
+    </div>
+  </div>
+</div>
+
+<!-- BULK ACTION BAR -->
+<div class="bulk-bar" id="bulk-bar">
+  <span class="bulk-count" id="bulk-count">0 selecionados</span>
+  <div class="bulk-actions">
+    <select id="bulk-status-val" style="padding:6px 10px;border-radius:3px;font-size:11px;font-family:'Spartan',sans-serif;background:#3a3a3a;color:var(--branco);border:1px solid #555;cursor:pointer">
+      <option value="">Alterar status para...</option>
+      <option value="Pago">Pago</option>
+      <option value="Pendente">Pendente</option>
+      <option value="Atrasado">Atrasado</option>
+      <option value="Ativo">Ativo</option>
+      <option value="Finalizado">Finalizado</option>
+    </select>
+    <button class="btn-bulk btn-bulk-status" onclick="bulkUpdateStatus()">Aplicar</button>
+    <button class="btn-bulk btn-bulk-del" onclick="bulkDelete()">🗑 Apagar selecionados</button>
+    <button class="btn-bulk btn-bulk-cancel" style="border:1px solid #555" onclick="clearSelection()">Cancelar</button>
   </div>
 </div>
 
@@ -735,8 +791,9 @@ function renderProjetos(){
   document.getElementById('proj-count').textContent = `${data.length} contratos`
   if(!data.length){document.getElementById('proj-table').innerHTML='<div class="empty">Nenhum projeto encontrado</div>';return}
   document.getElementById('proj-table').innerHTML = `<div class="tbl-wrap"><table>
-    <thead><tr><th>Nº</th><th>Contrato</th><th>Cliente</th><th>Serviço</th><th>Valor</th><th>A Receber</th><th>Conta</th><th>Status</th><th>Cidade</th><th>Origem</th><th></th></tr></thead>
+    <thead><tr><th><input type="checkbox" class="cb-row" onchange="toggleAll('contratos',this)"></th><th>Nº</th><th>Contrato</th><th>Cliente</th><th>Serviço</th><th>Valor</th><th>A Receber</th><th>Conta</th><th>Status</th><th>Cidade</th><th>Origem</th><th></th></tr></thead>
     <tbody>${data.map(p=>`<tr>
+      <td><input type="checkbox" class="cb-row" data-table="contratos" data-id="${p.id}" onchange="onCheckChange()"></td>
       <td class="td-muted">${p.numero||'—'}</td>
       <td class="td-bold" style="cursor:pointer;max-width:200px" onclick="showProjetoDrawer(${p.id})">${p.nome_contrato}</td>
       <td style="color:var(--preto-soft)">${p.cliente}</td>
@@ -872,6 +929,7 @@ function filterFin(f,btn){
 
 function renderFinanceiro(){
   document.getElementById('fin-entradas-tbody').innerHTML = E.map(e=>`<tr>
+    <td><input type="checkbox" class="cb-row" data-table="entradas" data-id="${e.id}" onchange="onCheckChange()"></td>
     <td class="td-muted">${fmtD(e.data_pagamento)}</td>
     <td class="td-bold">${e.nome_contrato||'—'}</td>
     <td class="td-muted">${e.cliente||'—'}</td>
@@ -881,19 +939,20 @@ function renderFinanceiro(){
     <td class="td-money td-green">${fmt(e.valor)}</td>
     <td>${badge(e.status)}</td>
     <td><button class="btn-edit" onclick="editItem('entrada',${e.id})">Editar</button></td>
-  </tr>`).join('') || '<tr><td colspan="9" class="empty">Nenhuma entrada</td></tr>'
+  </tr>`).join('') || '<tr><td colspan="10" class="empty">Nenhuma entrada</td></tr>'
 
   document.getElementById('fin-saidas-tbody').innerHTML = S.map(s=>`<tr>
+    <td><input type="checkbox" class="cb-row" data-table="saidas" data-id="${s.id}" onchange="onCheckChange()"></td>
     <td class="td-muted">${fmtD(s.data_pagamento)}</td>
     <td class="td-bold">${s.descricao||'—'}</td>
     <td>${badge(s.tipo_saida||'—')}</td>
-    <td>${s.nome_contrato ? `<span style="font-size:10px;color:var(--blue);font-weight:600">${s.nome_contrato}</span>` : `<span class="td-muted">Geral</span>`}</td>
+    <td>${s.nome_contrato?`<span style="font-size:10px;color:var(--blue);font-weight:600">${s.nome_contrato}</span>`:`<span class="td-muted">Geral</span>`}</td>
     <td>${contaBadge(s.conta)}</td>
     <td class="td-muted">${s.socia||'—'}</td>
     <td class="td-money td-red">${fmt(s.valor)}</td>
     <td>${badge(s.status)}</td>
     <td><button class="btn-edit" onclick="editItem('saida',${s.id})">Editar</button></td>
-  </tr>`).join('') || '<tr><td colspan="9" class="empty">Nenhuma saída</td></tr>'
+  </tr>`).join('') || '<tr><td colspan="10" class="empty">Nenhuma saída</td></tr>'
 
   document.getElementById('fin-fluxo-tbody').innerHTML = F.map(m=>{
     const fl=(m.entrada_total||0)-(m.saida_total||0)
@@ -933,8 +992,9 @@ function renderRTTable(){
   const data = rtFilter==='Todos' ? R : R.filter(r=>r.status===rtFilter)
   if(!data.length){document.getElementById('rt-table').innerHTML='<div class="empty">Nenhuma RT</div>';return}
   document.getElementById('rt-table').innerHTML=`<div class="tbl-wrap"><table>
-    <thead><tr><th>Projeto</th><th>Fornecedor</th><th>Categoria</th><th>Data</th><th>V. Venda</th><th>%RT</th><th>V. RT</th><th>A Receber</th><th>Conta</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th><input type="checkbox" class="cb-row" onchange="toggleAll('rt_comissoes',this)"></th><th>Projeto</th><th>Fornecedor</th><th>Categoria</th><th>Data</th><th>V. Venda</th><th>%RT</th><th>V. RT</th><th>A Receber</th><th>Conta</th><th>Status</th><th></th></tr></thead>
     <tbody>${data.map(r=>`<tr>
+      <td><input type="checkbox" class="cb-row" data-table="rt_comissoes" data-id="${r.id}" onchange="onCheckChange()"></td>
       <td class="td-bold">${r.projeto}</td>
       <td>${r.fornecedor||'—'}</td>
       <td>${badge(r.categoria||'—')}</td>
@@ -1108,7 +1168,11 @@ function mProjeto(d=null){
     ${fld('M²','<input id="m-m2">')}
   </div>
   ${fld('Observações','<textarea id="m-obs" rows="2"></textarea>',true)}
-  <div class="modal-actions"><button class="btn-cancel" onclick="closeModal()">Cancelar</button><button class="btn-save" id="modal-save-btn" onclick="saveProjeto(null)">Salvar</button></div>`
+  <div class="modal-actions">
+    ${d?`<button class="btn-delete" onclick="deleteItem('projeto',${d.id})">🗑 Apagar</button>`:''}
+    <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+    <button class="btn-save" id="modal-save-btn" onclick="saveProjeto(null)">Salvar</button>
+  </div>`
 }
 
 function mEntrada(d=null){
@@ -1126,7 +1190,11 @@ function mEntrada(d=null){
     ${fld('Mês/Ano','<input id="m-mes" placeholder="03/2026">')}
   </div>
   ${fld('Observações','<textarea id="m-obs" rows="2"></textarea>',true)}
-  <div class="modal-actions"><button class="btn-cancel" onclick="closeModal()">Cancelar</button><button class="btn-save" id="modal-save-btn" onclick="saveEntrada(null)">Salvar</button></div>`
+  <div class="modal-actions">
+    ${d?`<button class="btn-delete" onclick="deleteItem('entrada',${d.id})">🗑 Apagar</button>`:''}
+    <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+    <button class="btn-save" id="modal-save-btn" onclick="saveEntrada(null)">Salvar</button>
+  </div>`
 }
 
 function mSaida(d=null){
@@ -1144,7 +1212,11 @@ function mSaida(d=null){
     ${fld('Status',sel('m-status',['Pago','Pendente']))}
     ${fld('Mês/Ano','<input id="m-mes" placeholder="03/2026">')}
   </div>
-  <div class="modal-actions"><button class="btn-cancel" onclick="closeModal()">Cancelar</button><button class="btn-save" id="modal-save-btn" onclick="saveSaida(null)">Salvar</button></div>`
+  <div class="modal-actions">
+    ${d?`<button class="btn-delete" onclick="deleteItem('saida',${d.id})">🗑 Apagar</button>`:''}
+    <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+    <button class="btn-save" id="modal-save-btn" onclick="saveSaida(null)">Salvar</button>
+  </div>`
 }
 
 function mRT(d=null){
@@ -1163,7 +1235,11 @@ function mRT(d=null){
     ${fld('Conta',sel('m-conta',[{v:'pessoal',l:'PF (pessoal)'},{v:'jurídica',l:'PJ (jurídica)'}]))}
     ${fld('Status',sel('m-status',['A receber','Pago','Inadimplência']))}
   </div>
-  <div class="modal-actions"><button class="btn-cancel" onclick="closeModal()">Cancelar</button><button class="btn-save" id="modal-save-btn" onclick="saveRT(null)">Salvar</button></div>`
+  <div class="modal-actions">
+    ${d?`<button class="btn-delete" onclick="deleteItem('rt',${d.id})">🗑 Apagar</button>`:''}
+    <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+    <button class="btn-save" id="modal-save-btn" onclick="saveRT(null)">Salvar</button>
+  </div>`
 }
 
 function mRetirada(d=null){
@@ -1256,6 +1332,108 @@ async function saveRetirada(){
   })
   if(!error){closeModal();await loadData();renderSocias()}
   else alert('Erro: '+error.message)
+}
+
+// ═══════════════════════════════════════════════
+// DELETE — individual (via modal)
+// ═══════════════════════════════════════════════
+const tableMap = { projeto:'contratos', entrada:'entradas', saida:'saidas', rt:'rt_comissoes' }
+const reRender = { contratos:()=>renderProjetos(), entradas:()=>renderFinanceiro(), saidas:()=>renderFinanceiro(), rt_comissoes:()=>renderRT() }
+
+function deleteItem(type, id){
+  const label = {projeto:'este projeto',entrada:'esta entrada',saida:'esta saída',rt:'esta RT'}[type]||'este registro'
+  confirmDialog(
+    `Apagar ${label}?`,
+    'Esta ação remove o registro permanentemente do banco de dados e não pode ser desfeita.',
+    async ()=>{
+      const tbl = tableMap[type]
+      const {error} = await db.from(tbl).delete().eq('id',id)
+      if(!error){ closeModal(); await loadData(); reRender[tbl]?.() }
+      else alert('Erro ao apagar: '+error.message)
+    }
+  )
+}
+
+// ═══════════════════════════════════════════════
+// CONFIRM DIALOG
+// ═══════════════════════════════════════════════
+let _confirmCallback = null
+function confirmDialog(title, msg, onAccept){
+  document.getElementById('confirm-title').textContent = title
+  document.getElementById('confirm-msg').textContent = msg
+  _confirmCallback = onAccept
+  document.getElementById('confirm-overlay').classList.add('open')
+}
+function confirmAccept(){ document.getElementById('confirm-overlay').classList.remove('open'); _confirmCallback?.() }
+function confirmReject(){ document.getElementById('confirm-overlay').classList.remove('open'); _confirmCallback=null }
+
+// ═══════════════════════════════════════════════
+// BULK SELECTION
+// ═══════════════════════════════════════════════
+function getSelected(){
+  return [...document.querySelectorAll('.cb-row[data-table]:checked')].map(cb=>({table:cb.dataset.table, id:parseInt(cb.dataset.id)}))
+}
+
+function onCheckChange(){
+  const sel = getSelected()
+  const bar = document.getElementById('bulk-bar')
+  const count = document.getElementById('bulk-count')
+  if(sel.length > 0){
+    bar.classList.add('visible')
+    count.textContent = `${sel.length} selecionado${sel.length>1?'s':''}`
+  } else {
+    bar.classList.remove('visible')
+  }
+}
+
+function toggleAll(table, masterCb){
+  document.querySelectorAll(`.cb-row[data-table="${table}"]`).forEach(cb=>cb.checked=masterCb.checked)
+  onCheckChange()
+}
+
+function clearSelection(){
+  document.querySelectorAll('.cb-row').forEach(cb=>cb.checked=false)
+  document.getElementById('bulk-bar').classList.remove('visible')
+}
+
+async function bulkDelete(){
+  const sel = getSelected()
+  if(!sel.length) return
+  const tables = [...new Set(sel.map(s=>s.table))]
+  const label = tables.map(t=>({contratos:'projeto',entradas:'entrada',saidas:'saída',rt_comissoes:'RT'}[t]||t)).join('/')
+  confirmDialog(
+    `Apagar ${sel.length} registro${sel.length>1?'s':''}?`,
+    `Isso apagará permanentemente ${sel.length} ${label}${sel.length>1?'s':''} selecionado${sel.length>1?'s':''}. Essa ação não pode ser desfeita.`,
+    async ()=>{
+      // Group by table and delete in batches
+      for(const tbl of tables){
+        const ids = sel.filter(s=>s.table===tbl).map(s=>s.id)
+        const {error} = await db.from(tbl).delete().in('id',ids)
+        if(error){ alert('Erro ao apagar: '+error.message); return }
+      }
+      clearSelection()
+      await loadData()
+      // Re-render all affected pages
+      tables.forEach(tbl=>reRender[tbl]?.())
+    }
+  )
+}
+
+async function bulkUpdateStatus(){
+  const sel = getSelected()
+  const newStatus = document.getElementById('bulk-status-val').value
+  if(!sel.length || !newStatus) return
+  const tables = [...new Set(sel.map(s=>s.table))]
+  for(const tbl of tables){
+    const ids = sel.filter(s=>s.table===tbl).map(s=>s.id)
+    // Detect the correct status field per table
+    const field = tbl==='contratos' ? 'status' : tbl==='rt_comissoes' ? 'status' : 'status'
+    const {error} = await db.from(tbl).update({[field]:newStatus}).in('id',ids)
+    if(error){ alert('Erro ao atualizar: '+error.message); return }
+  }
+  clearSelection()
+  await loadData()
+  tables.forEach(tbl=>reRender[tbl]?.())
 }
 
 // ═══════════════════════════════════════════════

@@ -315,22 +315,24 @@ tbody tr:hover{background:#FAFAF8;}
             </div>
           </div>
 
-          <!-- Row 3: Contas Bancárias -->
-          <div class="panel" style="margin-bottom:14px">
-            <div class="panel-hd">
-              <span class="panel-title">🏦 Contas Bancárias</span>
-              <button class="btn-primary" style="font-size:10px;padding:6px 14px" onclick="openContaModal()">+ Conta</button>
-            </div>
-            <div class="panel-bd" id="dash-contas"><div class="loading">...</div></div>
-          </div>
+          <!-- Row 3: A receber por tipo + Custos 30 dias -->
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px">
 
-          <!-- Row 4: Custos próx 30 dias -->
-          <div class="panel">
-            <div class="panel-hd">
-              <span class="panel-title">⏱ Custos — próximos 30 dias</span>
-              <span id="dash-custos-total" style="font-family:'Libre Baskerville',serif;font-size:14px;color:var(--red)"></span>
+            <!-- A Receber por tipo de serviço -->
+            <div class="panel">
+              <div class="panel-hd"><span class="panel-title">A Receber — por tipo de serviço</span></div>
+              <div class="panel-bd" id="dash-receber-tipo"></div>
             </div>
-            <div class="panel-bd" id="dash-custos-30d"></div>
+
+            <!-- Custos próximos 30 dias -->
+            <div class="panel">
+              <div class="panel-hd">
+                <span class="panel-title">⏱ Custos — próximos 30 dias</span>
+                <span id="dash-custos-total" style="font-family:'Libre Baskerville',serif;font-size:13px;color:var(--red)"></span>
+              </div>
+              <div style="max-height:260px;overflow-y:auto" id="dash-custos-30d"></div>
+            </div>
+
           </div>
 
           <!-- Detail panel (clicável dos KPIs) -->
@@ -414,6 +416,18 @@ tbody tr:hover{background:#FAFAF8;}
             <button class="filter-btn" onclick="filterFin('entradas',this)">Entradas</button>
             <button class="filter-btn" onclick="filterFin('saidas',this)">Saídas</button>
             <button class="filter-btn" onclick="filterFin('fluxo',this)">Fluxo Mensal</button>
+            <button class="filter-btn" onclick="filterFin('contas',this)" style="margin-left:auto;border-color:var(--blue);color:var(--blue)">🏦 Contas</button>
+          </div>
+
+          <!-- Contas bancárias (oculto por padrão) -->
+          <div id="fin-contas-wrap" style="display:none;margin-bottom:14px">
+            <div class="panel">
+              <div class="panel-hd">
+                <span class="panel-title">🏦 Contas Bancárias</span>
+                <button class="btn-primary" style="font-size:10px;padding:6px 14px" onclick="openContaModal()">+ Conta</button>
+              </div>
+              <div class="panel-bd" id="fin-contas-body"><div class="loading">...</div></div>
+            </div>
           </div>
           <div id="fin-entradas-wrap">
             <div class="tbl-wrap" style="margin-bottom:14px">
@@ -745,10 +759,42 @@ function renderDashboard(){
       + `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--cool-gray);display:flex;justify-content:space-between;font-size:11px"><span style="color:var(--warm-gray)">Total</span><strong style="font-family:'Libre Baskerville',serif;color:var(--amber)">${fmt(rtTotal)}</strong></div>`
     : '<div class="empty" style="padding:24px">Nenhuma RT pendente</div>'
 
-  // Contas Bancárias
-  renderContasPanel()
+  // A Receber por tipo de serviço
+  const tiposServico = {}
+  P.filter(p=>(p.a_receber||0)>0).forEach(p=>{
+    const tipo = p.tipologia || p.servico || 'Outros'
+    if(!tiposServico[tipo]) tiposServico[tipo] = {total:0, projetos:[]}
+    tiposServico[tipo].total += p.a_receber||0
+    tiposServico[tipo].projetos.push(p)
+  })
+  // Também agrega RT a receber como categoria
+  const rtARec = R.filter(r=>r.status==='A receber').reduce((a,r)=>a+(r.a_receber||0),0)
+  if(rtARec>0) tiposServico['RT / Comissões'] = {total:rtARec, projetos:[]}
 
-  // Custos próximos 30 dias
+  const totalGeralRec = Object.values(tiposServico).reduce((a,v)=>a+v.total,0)
+  const tiposOrdenados = Object.entries(tiposServico).sort((a,b)=>b[1].total-a[1].total)
+
+  document.getElementById('dash-receber-tipo').innerHTML = tiposOrdenados.length
+    ? tiposOrdenados.map(([tipo, {total, projetos}])=>{
+        const pct = totalGeralRec > 0 ? (total/totalGeralRec*100) : 0
+        return `<div style="padding:10px 0;border-bottom:1px solid var(--cool-gray)">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">
+            <span style="font-size:11px;font-weight:600;color:var(--preto-soft)">${tipo}</span>
+            <span style="font-family:'Libre Baskerville',serif;font-size:13px;color:var(--amber)">${fmt(total)}</span>
+          </div>
+          <div style="background:var(--cool-gray);border-radius:2px;height:3px;margin-bottom:4px">
+            <div style="background:var(--amber);height:3px;border-radius:2px;width:${pct.toFixed(1)}%"></div>
+          </div>
+          <div style="font-size:9px;color:var(--warm-gray)">${projetos.length ? projetos.length+' projeto'+(projetos.length>1?'s':'') : 'RT'} · ${pct.toFixed(0)}% do total</div>
+        </div>`
+      }).join('')
+      + `<div style="display:flex;justify-content:space-between;padding:10px 0;font-size:11px">
+           <span style="color:var(--warm-gray)">Total geral</span>
+           <strong style="font-family:'Libre Baskerville',serif;color:var(--amber)">${fmt(totalGeralRec)}</strong>
+         </div>`
+    : '<div class="empty" style="padding:20px">Nenhum valor a receber</div>'
+
+  // Custos próximos 30 dias — lista
   const hoje = new Date()
   const em30 = new Date(); em30.setDate(hoje.getDate()+30)
   const custos30 = S.filter(s=>{
@@ -759,27 +805,28 @@ function renderDashboard(){
   const totalCustos = custos30.reduce((a,s)=>a+(s.valor||0),0)
   document.getElementById('dash-custos-total').textContent = fmt(totalCustos)
   document.getElementById('dash-custos-30d').innerHTML = custos30.length
-    ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">${custos30.map(s=>`
-        <div style="border:1px solid var(--border);border-radius:3px;padding:11px 13px;display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-          <div>
-            <div style="font-size:12px;font-weight:600;color:var(--preto-soft)">${s.descricao||s.tipo_saida}</div>
-            <div style="font-size:10px;color:var(--warm-gray);margin-top:2px">${fmtD(s.data_pagamento)} · ${s.tipo_saida}</div>
+    ? custos30.map(s=>`
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 18px;border-bottom:1px solid var(--cool-gray)">
+          <div style="min-width:0;flex:1;padding-right:12px">
+            <div style="font-size:11px;font-weight:600;color:var(--preto-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.descricao||s.tipo_saida}</div>
+            <div style="font-size:9px;color:var(--warm-gray);margin-top:2px">${fmtD(s.data_pagamento)} · ${s.tipo_saida}${s.socia?' · '+s.socia:''}</div>
           </div>
-          <div style="text-align:right;white-space:nowrap">
-            <div style="font-family:'Libre Baskerville',serif;font-size:13px;color:var(--red)">${fmt(s.valor)}</div>
-            ${s.socia?`<div style="font-size:9px;color:var(--warm-gray)">${s.socia}</div>`:''}
-          </div>
-        </div>`).join('')}</div>`
-    : '<div class="empty">Nenhum custo previsto para os próximos 30 dias</div>'
+          <div style="font-family:'Libre Baskerville',serif;font-size:13px;color:var(--red);white-space:nowrap">${fmt(s.valor)}</div>
+        </div>`).join('')
+    : '<div class="empty" style="padding:20px">Nenhum custo previsto nos próximos 30 dias</div>'
 }
 
 // ═══════════════════════════════════════════════
-// CONTAS BANCÁRIAS
+// CONTAS BANCÁRIAS (aba Financeiro)
 // ═══════════════════════════════════════════════
+function renderContasFinanceiro(){ renderContasPanel() }
+
 function renderContasPanel(){
+  const el = document.getElementById('fin-contas-body')
+  if(!el) return
   const totalCaixa = C.reduce((a,c)=>a+(c.saldo_atual||0),0)
-  document.getElementById('dash-contas').innerHTML = C.length
-    ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:14px">
+  el.innerHTML = C.length
+    ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:14px">
         ${C.map(c=>`
           <div style="border:1px solid var(--border);border-radius:3px;padding:14px 16px;position:relative">
             <div style="font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--warm-gray);margin-bottom:4px">${c.tipo||'Conta'}</div>
@@ -796,7 +843,7 @@ function renderContasPanel(){
         <span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--warm-gray)">Total em caixa</span>
         <span style="font-family:'Libre Baskerville',serif;font-size:16px;color:var(--emerald)">${fmt(totalCaixa)}</span>
       </div>`
-    : `<div style="text-align:center;padding:24px">
+    : `<div style="text-align:center;padding:32px">
         <div style="font-size:12px;color:var(--warm-gray);margin-bottom:12px">Nenhuma conta cadastrada ainda.</div>
         <button class="btn-primary" onclick="openContaModal()">+ Cadastrar primeira conta</button>
       </div>`
@@ -842,14 +889,14 @@ async function saveConta(id){
   const {error} = id
     ? await db.from('contas_bancarias').update(payload).eq('id',id)
     : await db.from('contas_bancarias').insert(payload)
-  if(!error){ closeModal(); await loadData(); renderDashboard() }
+  if(!error){ closeModal(); await loadData(); renderContasPanel(); renderDashboard() }
   else alert('Erro: '+error.message)
 }
 
 async function deleteConta(id){
   confirmDialog('Apagar conta?','O saldo e histórico desta conta serão removidos.',async()=>{
     const {error} = await db.from('contas_bancarias').delete().eq('id',id)
-    if(!error){ closeModal(); await loadData(); renderDashboard() }
+    if(!error){ closeModal(); await loadData(); renderContasPanel(); renderDashboard() }
     else alert('Erro: '+error.message)
   })
 }
@@ -1047,10 +1094,13 @@ function filterFin(f,btn){
   btn.classList.add('active')
   const showE = f==='Todos'||f==='entradas'
   const showS = f==='Todos'||f==='saidas'
-  const showF = f==='Todos'||f==='fluxo'
+  const showF = f==='fluxo'
+  const showC = f==='contas'
   document.getElementById('fin-entradas-wrap').style.display=showE?'block':'none'
   document.getElementById('fin-saidas-wrap').style.display=showS?'block':'none'
   document.getElementById('fin-fluxo-wrap').style.display=showF?'block':'none'
+  document.getElementById('fin-contas-wrap').style.display=showC?'block':'none'
+  if(showC) renderContasFinanceiro()
 }
 
 function renderFinanceiro(){
@@ -1699,17 +1749,18 @@ function parseCSV(){
     csvRows = []
 
     if(tipo==='cartao'){
-      // Cartão: date,title,amount  (negativos = compras, positivos = pagamentos/créditos)
+      // Cartão Nubank: date,title,amount
+      // Positivos = compras/despesas, Negativos = pagamentos/créditos (ignorar)
       lines.slice(1).forEach(line=>{
         const parts = parseCSVLine(line)
         if(parts.length < 3) return
         const [date, title, amountStr] = parts
         const amount = parseFloat(amountStr)||0
-        if(amount >= 0) return  // ignora créditos/pagamentos no cartão
+        if(amount <= 0) return  // ignora pagamentos e créditos
         csvRows.push({
-          data: date,  // já está em YYYY-MM-DD
+          data: date,  // já em YYYY-MM-DD
           desc: title,
-          valor: Math.abs(amount),
+          valor: amount,
           tipo: autoClassificar(title),
           vinculo: '',
           ignorar: false

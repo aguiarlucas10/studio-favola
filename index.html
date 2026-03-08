@@ -275,10 +275,6 @@ tbody tr:hover{background:#FAFAF8;}
         <button class="nav-item" onclick="showPage('socias')" id="nav-socias"><span class="nav-icon">◑</span>Sócias</button>
       </div>
       <div class="sb-footer">
-        <div class="caixa-box">
-          <div class="caixa-lbl">Caixa atual</div>
-          <div class="caixa-val" id="sidebar-caixa">—</div>
-        </div>
         <button class="btn-logout" onclick="doLogout()">← Sair</button>
       </div>
     </nav>
@@ -319,7 +315,16 @@ tbody tr:hover{background:#FAFAF8;}
             </div>
           </div>
 
-          <!-- Row 3: Custos próx 30 dias -->
+          <!-- Row 3: Contas Bancárias -->
+          <div class="panel" style="margin-bottom:14px">
+            <div class="panel-hd">
+              <span class="panel-title">🏦 Contas Bancárias</span>
+              <button class="btn-primary" style="font-size:10px;padding:6px 14px" onclick="openContaModal()">+ Conta</button>
+            </div>
+            <div class="panel-bd" id="dash-contas"><div class="loading">...</div></div>
+          </div>
+
+          <!-- Row 4: Custos próx 30 dias -->
           <div class="panel">
             <div class="panel-hd">
               <span class="panel-title">⏱ Custos — próximos 30 dias</span>
@@ -365,11 +370,45 @@ tbody tr:hover{background:#FAFAF8;}
         <div class="page-header">
           <div><h1>Financeiro</h1><p>Entradas, saídas e fluxo de caixa</p></div>
           <div style="display:flex;gap:8px">
+            <button class="btn-secondary" onclick="openImportCSV()" style="border-color:var(--blue);color:var(--blue)">⬆ Importar CSV</button>
             <button class="btn-secondary" onclick="openModal('entrada')">+ Entrada</button>
             <button class="btn-primary" onclick="openModal('saida')">+ Saída</button>
           </div>
         </div>
         <div class="page-content">
+          <!-- PAINEL DE IMPORTAÇÃO CSV -->
+          <div id="import-panel" style="display:none">
+            <div class="panel" style="margin-bottom:16px">
+              <div class="panel-hd">
+                <span class="panel-title">⬆ Importar Extrato CSV</span>
+                <button onclick="closeImportCSV()" style="background:none;border:none;cursor:pointer;font-size:16px;color:var(--warm-gray)">×</button>
+              </div>
+              <div class="panel-bd">
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">
+                  <div>
+                    <label style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--warm-gray);display:block;margin-bottom:6px">Tipo de arquivo</label>
+                    <select id="csv-tipo" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:3px;font-family:'Spartan',sans-serif;font-size:12px" onchange="resetImport()">
+                      <option value="extrato">Extrato Nubank (conta)</option>
+                      <option value="cartao">Cartão Nubank</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--warm-gray);display:block;margin-bottom:6px">Conta destino</label>
+                    <select id="csv-conta" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:3px;font-family:'Spartan',sans-serif;font-size:12px">
+                      <option value="jurídica">PJ (jurídica)</option>
+                      <option value="pessoal">PF (pessoal)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style="font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--warm-gray);display:block;margin-bottom:6px">Arquivo CSV</label>
+                    <input type="file" id="csv-file" accept=".csv" onchange="parseCSV()" style="width:100%;font-size:11px;padding:7px 0;font-family:'Spartan',sans-serif">
+                  </div>
+                </div>
+                <div id="import-preview"></div>
+              </div>
+            </div>
+          </div>
+
           <div class="filter-bar" id="fin-filter-bar">
             <button class="filter-btn active" onclick="filterFin('Todos',this)">Todos</button>
             <button class="filter-btn" onclick="filterFin('entradas',this)">Entradas</button>
@@ -531,7 +570,7 @@ async function checkSession(){
 // ═══════════════════════════════════════════════
 // DATA
 // ═══════════════════════════════════════════════
-let P=[], E=[], S=[], R=[], F=[]
+let P=[], E=[], S=[], R=[], F=[], C=[]  // C = contas bancárias
 
 async function initApp(){
   document.getElementById('login-screen').style.display='none'
@@ -546,14 +585,15 @@ async function initApp(){
 }
 
 async function loadData(){
-  const [p,e,s,r,f] = await Promise.all([
+  const [p,e,s,r,f,c] = await Promise.all([
     db.from('contratos').select('*').order('id',{ascending:false}),
-    db.from('entradas').select('*').order('data_pagamento',{ascending:false}).limit(300),
-    db.from('saidas').select('*').order('data_pagamento',{ascending:false}).limit(500),
+    db.from('entradas').select('*').order('data_pagamento',{ascending:false}).limit(500),
+    db.from('saidas').select('*').order('data_pagamento',{ascending:false}).limit(800),
     db.from('rt_comissoes').select('*').order('data_fechamento',{ascending:false}),
     db.from('fluxo_caixa').select('*').order('mes_ano',{ascending:false}).limit(60),
+    db.from('contas_bancarias').select('*').order('nome',{ascending:true}),
   ])
-  P=p.data||[]; E=e.data||[]; S=s.data||[]; R=r.data||[]; F=f.data||[]
+  P=p.data||[]; E=e.data||[]; S=s.data||[]; R=r.data||[]; F=f.data||[]; C=c.data||[]
 }
 
 // ═══════════════════════════════════════════════
@@ -583,43 +623,61 @@ function closeDrawer(){
 }
 
 // ═══════════════════════════════════════════════
+// FLUXO CALCULADO EM TEMPO REAL
+// ═══════════════════════════════════════════════
+function calcFluxoMeses(nMeses=6){
+  // Gera os últimos N meses (inclusive o atual)
+  const hoje = new Date()
+  const meses = []
+  for(let i=nMeses-1; i>=0; i--){
+    const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1)
+    const mesAno = `${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`
+    const entradas = E.filter(e=>e.mes_ano===mesAno && e.status==='Pago').reduce((a,e)=>a+(e.valor||0),0)
+    const saidas   = S.filter(s=>s.mes_ano===mesAno && s.status==='Pago').reduce((a,s)=>a+(s.valor||0),0)
+    meses.push({mesAno, entradas, saidas, saldo:entradas-saidas, label:d.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'})})
+  }
+  return meses
+}
+
+function calcFluxoMesAtual(){
+  const mes = mesAtual()
+  const entradas = E.filter(e=>e.mes_ano===mes && e.status==='Pago').reduce((a,e)=>a+(e.valor||0),0)
+  const saidas   = S.filter(s=>s.mes_ano===mes && s.status==='Pago').reduce((a,s)=>a+(s.valor||0),0)
+  return {entradas, saidas}
+}
+
+// ═══════════════════════════════════════════════
 // DASHBOARD
 // ═══════════════════════════════════════════════
-let caixaVisivel = false  // começa oculto
+let caixaVisivel = false
 
 function toggleCaixa(){
   caixaVisivel = !caixaVisivel
-  const el = document.getElementById('kpi-caixa-val')
+  const el  = document.getElementById('kpi-caixa-val')
   const eye = document.getElementById('kpi-caixa-eye')
-  const caixa = F.length ? (F.slice().sort((a,b)=>b.mes_ano.localeCompare(a.mes_ano))[0]?.saldo_conta||0) : 0
-  if(el) el.textContent = caixaVisivel ? fmt(caixa) : '••••••'
+  const totalCaixa = C.reduce((a,c)=>a+(c.saldo_atual||0),0)
+  if(el)  el.textContent  = caixaVisivel ? fmt(totalCaixa) : '••••••'
   if(eye) eye.textContent = caixaVisivel ? '👁' : '👁‍🗨'
 }
 
 function renderDashboard(){
-  // Pega o mês mais recente do fluxo (ordenado desc já vem do loadData)
-  const fluxoOrdenado = F.slice().sort((a,b)=>b.mes_ano.localeCompare(a.mes_ano))
-  const ultimoFluxo = fluxoOrdenado[0]
-  const caixa = ultimoFluxo?.saldo_conta||0
-  document.getElementById('sidebar-caixa').textContent = fmt(caixa)
-
-  const rec = ultimoFluxo?.entrada_total||0
-  const ret = ultimoFluxo?.retiradas||0
+  const totalCaixa = C.reduce((a,c)=>a+(c.saldo_atual||0),0)
+  const {entradas:rec} = calcFluxoMesAtual()
   const rtP = R.filter(r=>r.status==='A receber').reduce((a,r)=>a+(r.a_receber||0),0)
   const ativ = P.filter(p=>p.status==='Ativo').length
   const totalAreceber = P.reduce((a,p)=>a+(p.a_receber||0),0)
 
-  // KPIs — 5 cards, caixa começa oculto
+  // KPIs
   document.getElementById('dash-kpis').innerHTML = `
     <div class="kpi green">
       <button class="kpi-eye" id="kpi-caixa-eye" onclick="event.stopPropagation();toggleCaixa()" title="Mostrar/ocultar">👁‍🗨</button>
-      <div class="kpi-lbl">Caixa Atual</div>
+      <div class="kpi-lbl">Caixa Total</div>
       <div class="kpi-val" id="kpi-caixa-val">••••••</div>
-      <div class="kpi-sub">saldo conta</div>
+      <div class="kpi-sub">${C.length ? C.map(c=>c.nome).join(' · ') : 'sem contas cadastradas'}</div>
     </div>
     <div class="kpi warm" onclick="dashDetail('receita')">
       <div class="kpi-lbl">Receita do Mês</div><div class="kpi-val">${fmt(rec)}</div>
-      <div class="kpi-sub">entradas mês atual</div><div class="kpi-hint">↗ clique p/ ver</div>
+      <div class="kpi-sub">entradas pagas</div><div class="kpi-hint">↗ clique p/ ver</div>
     </div>
     <div class="kpi amber" onclick="dashDetail('areceber')">
       <div class="kpi-lbl">Projetos a Receber</div><div class="kpi-val">${fmt(totalAreceber)}</div>
@@ -634,51 +692,34 @@ function renderDashboard(){
       <div class="kpi-sub">comissões pendentes</div><div class="kpi-hint">↗ clique p/ ver</div>
     </div>`
 
-  // Fluxo de Caixa — chart SVG responsivo
-  const meses6 = fluxoOrdenado.slice(0,6).reverse()
-  if(meses6.length === 0){
-    document.getElementById('dash-chart-wrap').innerHTML = '<div class="empty">Sem dados de fluxo</div>'
-  } else {
-    const maxV = Math.max(...meses6.map(m=>Math.max(m.entrada_total||0, m.saida_total||0)), 1)
-    const barW = 18, gap = 8, grpW = barW*2+gap, padL=36, padB=28, padT=12, h=110
-    const totalW = padL + meses6.length*(grpW+16) + 16
-    const scaleY = v => padT + (h - padT - padB) * (1 - v/maxV)
-    const barH = v => Math.max(0, (h - padT - padB) * (v/maxV))
+  // Fluxo de Caixa — calculado em tempo real
+  const meses6 = calcFluxoMeses(6)
+  const maxV = Math.max(...meses6.map(m=>Math.max(m.entradas, m.saidas)), 1)
+  const barW=18, padL=36, padB=28, padT=12, h=110
+  const totalW = padL + meses6.length*(barW*2+2+16) + 16
+  const scaleY = v => padT + (h-padT-padB)*(1-v/maxV)
+  const barH   = v => Math.max(0, (h-padT-padB)*(v/maxV))
 
-    let rects = '', labels = '', gridLines = ''
-    // Grid lines
-    for(let i=0;i<=4;i++){
-      const y = padT + (h-padT-padB)*i/4
-      const val = maxV*(1-i/4)
-      gridLines += `<line x1="${padL}" y1="${y}" x2="${totalW}" y2="${y}" stroke="#E2DED4" stroke-width="1"/>
-        <text x="${padL-4}" y="${y+3}" text-anchor="end" font-size="7" fill="#B6ADA5">${val>=1000?(val/1000).toFixed(0)+'k':val.toFixed(0)}</text>`
-    }
-
-    meses6.forEach((m,i)=>{
-      const x = padL + 8 + i*(grpW+16)
-      const eH = barH(m.entrada_total||0), sH = barH(m.saida_total||0)
-      const eY = scaleY(m.entrada_total||0), sY = scaleY(m.saida_total||0)
-      const lbl = new Date(m.mes_ano+'T12:00:00').toLocaleDateString('pt-BR',{month:'short',year:'2-digit'})
-      rects += `<rect x="${x}" y="${eY}" width="${barW}" height="${eH}" fill="#4A7C59" rx="2">
-          <title>Entradas ${lbl}: ${fmt(m.entrada_total)}</title></rect>
-        <rect x="${x+barW+2}" y="${sY}" width="${barW}" height="${sH}" fill="#D6D2C4" rx="2">
-          <title>Saídas ${lbl}: ${fmt(m.saida_total)}</title></rect>`
-      labels += `<text x="${x+barW}" y="${h-6}" text-anchor="middle" font-size="8" fill="#8C8278">${lbl}</text>`
-    })
-
-    document.getElementById('dash-chart-wrap').innerHTML = `
-      <svg width="100%" viewBox="0 0 ${totalW} ${h}" style="display:block">
-        ${gridLines}
-        <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${h-padB}" stroke="#DDD9D0" stroke-width="1"/>
-        ${rects}${labels}
-      </svg>`
+  let rects='', labels='', gridLines=''
+  for(let i=0;i<=4;i++){
+    const y = padT+(h-padT-padB)*i/4
+    const val = maxV*(1-i/4)
+    gridLines += `<line x1="${padL}" y1="${y}" x2="${totalW}" y2="${y}" stroke="#E2DED4" stroke-width="1"/>
+      <text x="${padL-4}" y="${y+3}" text-anchor="end" font-size="7" fill="#B6ADA5">${val>=1000?(val/1000).toFixed(1)+'k':val.toFixed(0)}</text>`
   }
+  meses6.forEach((m,i)=>{
+    const x = padL+8+i*(barW*2+2+16)
+    rects  += `<rect x="${x}" y="${scaleY(m.entradas)}" width="${barW}" height="${barH(m.entradas)}" fill="#4A7C59" rx="2"><title>${m.mesAno} Entradas: ${fmt(m.entradas)}</title></rect>`
+    rects  += `<rect x="${x+barW+2}" y="${scaleY(m.saidas)}" width="${barW}" height="${barH(m.saidas)}" fill="#D6D2C4" rx="2"><title>${m.mesAno} Saídas: ${fmt(m.saidas)}</title></rect>`
+    labels += `<text x="${x+barW}" y="${h-6}" text-anchor="middle" font-size="8" fill="#8C8278">${m.label}</text>`
+  })
+  document.getElementById('dash-chart-wrap').innerHTML =
+    `<svg width="100%" viewBox="0 0 ${totalW} ${h}" style="display:block">${gridLines}<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${h-padB}" stroke="#DDD9D0" stroke-width="1"/>${rects}${labels}</svg>`
 
-  // Projetos a Receber — lista scrollável
+  // Projetos a Receber
   const comReceber = P.filter(p=>(p.a_receber||0)>0).sort((a,b)=>(b.a_receber||0)-(a.a_receber||0)).slice(0,10)
   document.getElementById('dash-proj-receber').innerHTML = comReceber.length
-    ? comReceber.map(p=>`
-      <div class="row-item" style="padding:8px 0">
+    ? comReceber.map(p=>`<div class="row-item" style="padding:8px 0">
         <div style="min-width:0;flex:1;padding-right:8px">
           <div class="row-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nome_contrato}</div>
           <div class="row-sub">${p.cliente} · ${badge(p.status)}</div>
@@ -704,6 +745,9 @@ function renderDashboard(){
       + `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--cool-gray);display:flex;justify-content:space-between;font-size:11px"><span style="color:var(--warm-gray)">Total</span><strong style="font-family:'Libre Baskerville',serif;color:var(--amber)">${fmt(rtTotal)}</strong></div>`
     : '<div class="empty" style="padding:24px">Nenhuma RT pendente</div>'
 
+  // Contas Bancárias
+  renderContasPanel()
+
   // Custos próximos 30 dias
   const hoje = new Date()
   const em30 = new Date(); em30.setDate(hoje.getDate()+30)
@@ -727,6 +771,87 @@ function renderDashboard(){
           </div>
         </div>`).join('')}</div>`
     : '<div class="empty">Nenhum custo previsto para os próximos 30 dias</div>'
+}
+
+// ═══════════════════════════════════════════════
+// CONTAS BANCÁRIAS
+// ═══════════════════════════════════════════════
+function renderContasPanel(){
+  const totalCaixa = C.reduce((a,c)=>a+(c.saldo_atual||0),0)
+  document.getElementById('dash-contas').innerHTML = C.length
+    ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:14px">
+        ${C.map(c=>`
+          <div style="border:1px solid var(--border);border-radius:3px;padding:14px 16px;position:relative">
+            <div style="font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--warm-gray);margin-bottom:4px">${c.tipo||'Conta'}</div>
+            <div style="font-size:13px;font-weight:600;color:var(--preto-soft);margin-bottom:6px">${c.nome}</div>
+            <div style="font-family:'Libre Baskerville',serif;font-size:18px;color:var(--emerald)">${fmt(c.saldo_atual||0)}</div>
+            ${c.atualizado_em?`<div style="font-size:9px;color:var(--text-muted);margin-top:4px">Atualizado ${fmtD(c.atualizado_em)}</div>`:''}
+            <button onclick="editConta(${c.id})" style="position:absolute;top:10px;right:10px;background:none;border:none;font-size:10px;color:var(--warm-gray);cursor:pointer;letter-spacing:.06em">editar</button>
+          </div>`).join('')}
+        <div style="border:1px dashed var(--border);border-radius:3px;padding:14px 16px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--warm-gray);font-size:11px;letter-spacing:.06em" onclick="openContaModal()">
+          + Nova conta
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-top:1px solid var(--cool-gray)">
+        <span style="font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--warm-gray)">Total em caixa</span>
+        <span style="font-family:'Libre Baskerville',serif;font-size:16px;color:var(--emerald)">${fmt(totalCaixa)}</span>
+      </div>`
+    : `<div style="text-align:center;padding:24px">
+        <div style="font-size:12px;color:var(--warm-gray);margin-bottom:12px">Nenhuma conta cadastrada ainda.</div>
+        <button class="btn-primary" onclick="openContaModal()">+ Cadastrar primeira conta</button>
+      </div>`
+}
+
+function openContaModal(id=null){
+  const c = id ? C.find(x=>x.id===id) : null
+  const tipos = ['Conta Corrente PJ','Conta Corrente PF','Poupança','Carteira','Outro']
+  document.getElementById('modal-content').innerHTML = `
+    <h3>${c?'Editar Conta':'Nova Conta Bancária'}</h3><div class="modal-divider"></div>
+    <div class="mg">
+      ${fld('Nome da Conta','<input id="mc-nome" placeholder="Ex: Nubank PJ, C6 PF…">')}
+      ${fld('Tipo',sel('mc-tipo', tipos))}
+      ${fld('Saldo Atual (R$)','<input id="mc-saldo" type="number" step="0.01" placeholder="0,00">')}
+      ${fld('Data de Referência','<input id="mc-data" type="date">')}
+      ${fld('Observação','<input id="mc-obs" placeholder="opcional">')}
+    </div>
+    <div class="modal-actions">
+      ${c?`<button class="btn-delete" onclick="deleteConta(${c.id})">🗑 Apagar</button>`:''}
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-save" onclick="saveConta(${c?.id||'null'})">Salvar</button>
+    </div>`
+  document.getElementById('modal-overlay').classList.add('open')
+  if(c) setTimeout(()=>{
+    document.getElementById('mc-nome').value = c.nome||''
+    document.getElementById('mc-tipo').value = c.tipo||''
+    document.getElementById('mc-saldo').value = c.saldo_atual||''
+    document.getElementById('mc-data').value = c.atualizado_em||''
+    document.getElementById('mc-obs').value = c.obs||''
+  },50)
+}
+
+function editConta(id){ openContaModal(id) }
+
+async function saveConta(id){
+  const payload = {
+    nome: document.getElementById('mc-nome').value,
+    tipo: document.getElementById('mc-tipo').value,
+    saldo_atual: parseFloat(document.getElementById('mc-saldo').value)||0,
+    atualizado_em: document.getElementById('mc-data').value||null,
+    obs: document.getElementById('mc-obs').value||null,
+  }
+  const {error} = id
+    ? await db.from('contas_bancarias').update(payload).eq('id',id)
+    : await db.from('contas_bancarias').insert(payload)
+  if(!error){ closeModal(); await loadData(); renderDashboard() }
+  else alert('Erro: '+error.message)
+}
+
+async function deleteConta(id){
+  confirmDialog('Apagar conta?','O saldo e histórico desta conta serão removidos.',async()=>{
+    const {error} = await db.from('contas_bancarias').delete().eq('id',id)
+    if(!error){ closeModal(); await loadData(); renderDashboard() }
+    else alert('Erro: '+error.message)
+  })
 }
 
 function dashDetail(type){
@@ -955,16 +1080,17 @@ function renderFinanceiro(){
     <td><button class="btn-edit" onclick="editItem('saida',${s.id})">Editar</button></td>
   </tr>`).join('') || '<tr><td colspan="10" class="empty">Nenhuma saída</td></tr>'
 
-  document.getElementById('fin-fluxo-tbody').innerHTML = F.map(m=>{
-    const fl=(m.entrada_total||0)-(m.saida_total||0)
-    const mes=new Date(m.mes_ano+'T12:00:00').toLocaleDateString('pt-BR',{month:'short',year:'numeric'})
+  // Fluxo mensal calculado em tempo real (últimos 24 meses)
+  const fluxoCalc = calcFluxoMeses(24).reverse()  // mais recente primeiro
+  document.getElementById('fin-fluxo-tbody').innerHTML = fluxoCalc.map(m=>{
+    const fl = m.saldo
     return `<tr>
-      <td class="td-bold">${mes}</td>
-      <td class="td-money td-green">${fmt(m.entrada_total)}</td>
-      <td class="td-money td-red">${fmt(m.saida_total)}</td>
+      <td class="td-bold">${m.label}</td>
+      <td class="td-money td-green">${fmt(m.entradas)}</td>
+      <td class="td-money td-red">${fmt(m.saidas)}</td>
       <td class="td-money ${fl>=0?'td-green':'td-red'}">${fl>=0?'+':''}${fmt(fl)}</td>
-      <td class="td-money td-bold">${fmt(m.saldo_conta)}</td>
-      <td class="td-money" style="color:var(--warm-gray)">${m.mensal_por_socia?fmt(m.mensal_por_socia):'—'}</td>
+      <td class="td-money" style="color:var(--warm-gray)">—</td>
+      <td class="td-money" style="color:var(--warm-gray)">—</td>
     </tr>`}).join('') || '<tr><td colspan="6" class="empty">Nenhum dado</td></tr>'
 }
 
@@ -1520,6 +1646,247 @@ async function bulkUpdateStatus(){
   clearSelection()
   await loadData()
   tables.forEach(tbl=>reRender[tbl]?.())
+}
+
+// ═══════════════════════════════════════════════
+// IMPORTADOR CSV — Nubank extrato / cartão
+// ═══════════════════════════════════════════════
+let csvRows = []  // linhas parseadas aguardando classificação
+
+const tiposSaida = ['escritório despesa','projeto despesa','marketing','honorários','imposto','retirada de lucros','pró-labore','outro']
+
+// Mapeamento automático por palavras-chave na descrição
+const autoClassMap = [
+  {k:['openai','chatgpt','adobe','notion','google','canva','figma','spotify','netflix','dropbox','icloud'],   t:'escritório despesa'},
+  {k:['imposto','das ','irpf','irpj','receita federal','simples'],                                            t:'imposto'},
+  {k:['instagram','facebook','meta ads','tráfego','marketing'],                                               t:'marketing'},
+  {k:['pro-labore','pró-labore','prolabore'],                                                                  t:'pró-labore'},
+  {k:['retirada','dividendo','lucro'],                                                                         t:'retirada de lucros'},
+  {k:['contabilidade','contador','escritório contabil','contabil'],                                            t:'honorários'},
+]
+
+function autoClassificar(desc){
+  const d = (desc||'').toLowerCase()
+  for(const {k,t} of autoClassMap) if(k.some(w=>d.includes(w))) return t
+  return 'escritório despesa'
+}
+
+function openImportCSV(){
+  document.getElementById('import-panel').style.display='block'
+  document.getElementById('import-panel').scrollIntoView({behavior:'smooth'})
+}
+function closeImportCSV(){
+  document.getElementById('import-panel').style.display='none'
+  document.getElementById('import-preview').innerHTML=''
+  document.getElementById('csv-file').value=''
+  csvRows=[]
+}
+function resetImport(){
+  document.getElementById('import-preview').innerHTML=''
+  document.getElementById('csv-file').value=''
+  csvRows=[]
+}
+
+function parseCSV(){
+  const file = document.getElementById('csv-file').files[0]
+  const tipo = document.getElementById('csv-tipo').value
+  if(!file) return
+  const reader = new FileReader()
+  reader.onload = e => {
+    const text = e.target.result
+    const lines = text.split('\n').map(l=>l.trim()).filter(Boolean)
+    const header = lines[0].toLowerCase()
+    csvRows = []
+
+    if(tipo==='cartao'){
+      // Cartão: date,title,amount  (negativos = compras, positivos = pagamentos/créditos)
+      lines.slice(1).forEach(line=>{
+        const parts = parseCSVLine(line)
+        if(parts.length < 3) return
+        const [date, title, amountStr] = parts
+        const amount = parseFloat(amountStr)||0
+        if(amount >= 0) return  // ignora créditos/pagamentos no cartão
+        csvRows.push({
+          data: date,  // já está em YYYY-MM-DD
+          desc: title,
+          valor: Math.abs(amount),
+          tipo: autoClassificar(title),
+          vinculo: '',
+          ignorar: false
+        })
+      })
+    } else {
+      // Extrato conta: Data,Valor,Identificador,Descrição
+      lines.slice(1).forEach(line=>{
+        const parts = parseCSVLine(line)
+        if(parts.length < 4) return
+        const [data, valorStr, , desc] = parts
+        const valor = parseFloat(valorStr)||0
+        // Formata data de DD/MM/YYYY para YYYY-MM-DD
+        const [d,m,y] = data.split('/')
+        const dataISO = y && m && d ? `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}` : data
+        csvRows.push({
+          data: dataISO,
+          desc: desc,
+          valor: valor,
+          isEntrada: valor > 0,
+          tipo: valor > 0 ? 'entrada' : autoClassificar(desc),
+          vinculo: '',
+          ignorar: false
+        })
+      })
+    }
+
+    renderImportPreview()
+  }
+  reader.readAsText(file, 'UTF-8')
+}
+
+function parseCSVLine(line){
+  // Lida com aspas e vírgulas dentro de campos
+  const result = []
+  let cur = '', inQ = false
+  for(let i=0;i<line.length;i++){
+    const ch = line[i]
+    if(ch==='"'){ if(inQ && line[i+1]==='"'){cur+='"';i++}else inQ=!inQ }
+    else if(ch===','&&!inQ){ result.push(cur.trim()); cur='' }
+    else cur+=ch
+  }
+  result.push(cur.trim())
+  return result
+}
+
+function renderImportPreview(){
+  const tipo = document.getElementById('csv-tipo').value
+  const projOpts = P.map(p=>`<option value="${p.id}|${p.nome_contrato}">${p.nome_contrato}</option>`).join('')
+  const tipoOpts = tiposSaida.map(t=>`<option value="${t}">${t}</option>`).join('')
+
+  const totalImportar = csvRows.filter(r=>!r.ignorar).length
+  const totalValor = csvRows.filter(r=>!r.ignorar).reduce((a,r)=>a+Math.abs(r.valor),0)
+
+  document.getElementById('import-preview').innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <span style="font-size:11px;color:var(--warm-gray)">${csvRows.length} transações encontradas · <strong>${totalImportar} para importar</strong> · ${fmt(totalValor)}</span>
+      <div style="display:flex;gap:8px">
+        <button class="btn-secondary" onclick="csvIgnorarTodos()" style="font-size:10px;padding:6px 12px">Desmarcar todos</button>
+        <button class="btn-primary" onclick="importarCSV()" style="font-size:10px;padding:6px 14px">✓ Importar selecionados</button>
+      </div>
+    </div>
+    <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
+    <table>
+      <thead><tr>
+        <th><input type="checkbox" checked onchange="csvToggleAll(this)"></th>
+        <th>Data</th><th>Descrição</th>
+        ${tipo==='extrato'?'<th>Tipo</th>':''}
+        <th>Classificação</th><th>Vínculo Projeto</th>
+        <th style="text-align:right">Valor</th>
+      </tr></thead>
+      <tbody id="import-tbody">
+        ${csvRows.map((r,i)=>{
+          const corValor = tipo==='extrato' && r.isEntrada ? 'color:var(--emerald)' : 'color:var(--red)'
+          const sinal = tipo==='extrato' && r.isEntrada ? '+' : '-'
+          return `<tr id="csv-row-${i}" style="${r.ignorar?'opacity:.35':''}">
+            <td><input type="checkbox" ${r.ignorar?'':'checked'} onchange="csvToggleRow(${i},this)"></td>
+            <td class="td-muted">${fmtD(r.data)}</td>
+            <td style="max-width:260px;font-size:11px">${r.desc}</td>
+            ${tipo==='extrato'?`<td><span class="badge ${r.isEntrada?'bg-green':'bg-red'}">${r.isEntrada?'Entrada':'Saída'}</span></td>`:''}
+            <td>
+              ${tipo==='extrato'&&r.isEntrada
+                ? `<select onchange="csvRows[${i}].vinculo=this.value" style="font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:3px;font-family:'Spartan',sans-serif;width:100%">
+                    <option value="">— Contrato —</option>${projOpts}
+                  </select>`
+                : `<select onchange="csvRows[${i}].tipo=this.value" style="font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:3px;font-family:'Spartan',sans-serif;width:100%">
+                    ${tiposSaida.map(t=>`<option value="${t}" ${t===r.tipo?'selected':''}>${t}</option>`).join('')}
+                  </select>`
+              }
+            </td>
+            <td>
+              <select onchange="csvRows[${i}].vinculo=this.value" style="font-size:11px;padding:4px 6px;border:1px solid var(--border);border-radius:3px;font-family:'Spartan',sans-serif;width:100%">
+                <option value="">Geral</option>${projOpts}
+              </select>
+            </td>
+            <td style="text-align:right;font-family:'Libre Baskerville',serif;font-size:12px;${corValor}">${sinal}${fmt(r.valor)}</td>
+          </tr>`}).join('')}
+      </tbody>
+    </table></div>`
+}
+
+function csvToggleAll(cb){
+  csvRows.forEach(r=>r.ignorar=!cb.checked)
+  renderImportPreview()
+}
+function csvToggleRow(i, cb){
+  csvRows[i].ignorar = !cb.checked
+  const row = document.getElementById(`csv-row-${i}`)
+  if(row) row.style.opacity = cb.checked ? '1' : '.35'
+  // Atualiza contador
+  const total = csvRows.filter(r=>!r.ignorar)
+  const el = document.getElementById('import-preview').querySelector('span')
+  if(el) el.innerHTML = `${csvRows.length} transações encontradas · <strong>${total.length} para importar</strong> · ${fmt(total.reduce((a,r)=>a+Math.abs(r.valor),0))}`
+}
+function csvIgnorarTodos(){
+  csvRows.forEach(r=>r.ignorar=true)
+  renderImportPreview()
+}
+
+async function importarCSV(){
+  const tipo = document.getElementById('csv-tipo').value
+  const contaGlobal = document.getElementById('csv-conta').value
+  const paraImportar = csvRows.filter(r=>!r.ignorar)
+  if(!paraImportar.length){ alert('Nenhuma linha selecionada.'); return }
+
+  let entradas=[], saidas=[]
+
+  for(const r of paraImportar){
+    const [d,m,y] = r.data.split('-')
+    const mesAno = d&&m&&y ? `${m}/${y}` : mesAtual()
+    const vinculo = r.vinculo || ''
+    const [cid, cnome] = vinculo ? vinculo.split('|') : [null,null]
+    const proj = cnome ? P.find(p=>p.nome_contrato===cnome) : null
+
+    if(tipo==='extrato' && r.isEntrada){
+      entradas.push({
+        contrato_id: cid?parseInt(cid):null, nome_contrato:cnome||null,
+        cliente:proj?.cliente||null, tipo_entrada:'projeto',
+        valor:r.valor, data_pagamento:r.data, conta:contaGlobal,
+        forma_pagto:'PIX', status:'Pago', mes_ano:mesAno,
+        obs:`[Importado CSV] ${r.desc}`
+      })
+    } else {
+      saidas.push({
+        tipo_saida: r.tipo, descricao:r.desc,
+        valor: r.valor, data_pagamento:r.data,
+        conta: contaGlobal, status:'Pago', mes_ano:mesAno,
+        contrato_id: cid?parseInt(cid):null,
+        nome_contrato: cnome||null,
+        obs:`[Importado CSV]`
+      })
+    }
+  }
+
+  // Inserir em lotes
+  let erros = 0
+  if(entradas.length){
+    const {error} = await db.from('entradas').insert(entradas)
+    if(error){ erros++; console.error('Entradas:', error.message) }
+  }
+  if(saidas.length){
+    const {error} = await db.from('saidas').insert(saidas)
+    if(error){ erros++; console.error('Saídas:', error.message) }
+  }
+
+  if(erros){ alert('Alguns registros não foram importados. Verifique o console.'); return }
+
+  const msg = `✓ Importados: ${entradas.length} entradas + ${saidas.length} saídas`
+  closeImportCSV()
+  await loadData()
+  renderFinanceiro()
+  // Mostra confirmação inline
+  const fb = document.createElement('div')
+  fb.style.cssText='position:fixed;top:20px;right:24px;background:var(--emerald);color:#fff;padding:12px 20px;border-radius:4px;font-size:12px;font-family:Spartan,sans-serif;letter-spacing:.06em;z-index:999;box-shadow:0 4px 16px rgba(0,0,0,.15)'
+  fb.textContent = msg
+  document.body.appendChild(fb)
+  setTimeout(()=>fb.remove(), 4000)
 }
 
 // ═══════════════════════════════════════════════

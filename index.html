@@ -1210,37 +1210,56 @@ function renderFinanceiro(){
     <td><button class="btn-edit" onclick="editItem('saida',${s.id})">Editar</button></td>
   </tr>`).join('') || '<tr><td colspan="10" class="empty">Nenhuma saída</td></tr>'
 
-  // Fluxo mensal — todos os meses únicos que têm dados em E ou S
+  // Fluxo mensal — apenas meses válidos até o mês atual
+  const hoje = new Date()
+  const mesAtualNum = hoje.getFullYear() * 100 + (hoje.getMonth() + 1)  // ex: 202603
+
   const todosMeses = [...new Set([...E, ...S].map(r=>r.mes_ano).filter(Boolean))]
+    .filter(m => {
+      const parts = m.split('/')
+      if(parts.length !== 2) return false
+      const mm = parseInt(parts[0]), yy = parseInt(parts[1])
+      if(isNaN(mm)||isNaN(yy)||mm<1||mm>12||yy<2000||yy>2100) return false
+      return yy * 100 + mm <= mesAtualNum  // remove meses futuros
+    })
     .sort((a,b)=>{
-      // Ambos já normalizados para MM/YYYY após normalizaArrays
       const [ma,ya] = a.split('/').map(Number)
       const [mb,yb] = b.split('/').map(Number)
-      return (yb-ya)||(mb-ma)  // desc por ano, depois desc por mês
+      return (yb-ya)||(mb-ma)
     })
-  // Garante que o mês atual sempre apareça mesmo sem dados
+
+  // Garante mês atual mesmo sem dados
   const mesAtualVal = mesAtual()
   if(!todosMeses.includes(mesAtualVal)) todosMeses.unshift(mesAtualVal)
 
-  document.getElementById('fin-fluxo-tbody').innerHTML = todosMeses.map(mesAno=>{
-    // mesAno sempre MM/YYYY após normalizaArrays
-    const parts = mesAno.split('/')
-    const mm = parseInt(parts[0])-1   // 0-indexed month
-    const yyyy = parseInt(parts[1])
-    const label = (!isNaN(mm) && !isNaN(yyyy))
-      ? new Date(yyyy, mm, 1).toLocaleDateString('pt-BR',{month:'short',year:'numeric'})
-      : mesAno
+  // Calcula fluxo de cada mês (ordem cronológica para acumular)
+  const mesesCronologicos = [...todosMeses].reverse()
+  let saldoAcum = 0
+  const fluxoPorMes = {}
+  mesesCronologicos.forEach(mesAno => {
     const entradas = E.filter(e=>e.mes_ano===mesAno && e.status==='Pago').reduce((a,e)=>a+(e.valor||0),0)
     const saidas   = S.filter(s=>s.mes_ano===mesAno && s.status==='Pago').reduce((a,s)=>a+(s.valor||0),0)
     const fl = entradas - saidas
+    saldoAcum += fl
+    fluxoPorMes[mesAno] = { entradas, saidas, fl, saldoAcum }
+  })
+
+  document.getElementById('fin-fluxo-tbody').innerHTML = todosMeses.map(mesAno=>{
+    const parts = mesAno.split('/')
+    const mm = parseInt(parts[0]) - 1
+    const yyyy = parseInt(parts[1])
+    const label = new Date(yyyy, mm, 1).toLocaleDateString('pt-BR',{month:'short',year:'numeric'})
+    const { entradas, saidas, fl, saldoAcum: sa } = fluxoPorMes[mesAno] || {entradas:0,saidas:0,fl:0,saldoAcum:0}
+    const porSocia = fl / 2
     return `<tr>
       <td class="td-bold">${label}</td>
       <td class="td-money td-green">${fmt(entradas)}</td>
       <td class="td-money td-red">${fmt(saidas)}</td>
       <td class="td-money ${fl>=0?'td-green':'td-red'}">${fl>=0?'+':''}${fmt(fl)}</td>
-      <td class="td-money" style="color:var(--warm-gray)">—</td>
-      <td class="td-money" style="color:var(--warm-gray)">—</td>
-    </tr>`}).join('') || '<tr><td colspan="6" class="empty">Nenhum dado</td></tr>'
+      <td class="td-money ${sa>=0?'td-green':'td-red'}" style="font-weight:600">${fmt(sa)}</td>
+      <td class="td-money ${porSocia>=0?'':'td-red'}" style="color:var(--warm-gray)">${porSocia>=0?'+':''}${fmt(porSocia)}</td>
+    </tr>`
+  }).join('') || '<tr><td colspan="6" class="empty">Nenhum dado</td></tr>'
 }
 
 // ═══════════════════════════════════════════════

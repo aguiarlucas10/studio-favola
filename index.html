@@ -564,7 +564,7 @@ const db = createClient(SUPABASE_URL, SUPABASE_KEY)
 // ═══════════════════════════════════════════════
 const fmt = v => (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
 const fmtD = d => d ? new Date(d+'T12:00:00').toLocaleDateString('pt-BR') : '—'
-const mesAtual = () => { const d=new Date(); return `${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` }
+const mesAtual = () => { const d=new Date(); return `01/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` }
 const statusMap = { Pago:'bg-green','A Receber':'bg-amber','A Pagar':'bg-amber',Atrasado:'bg-red',Ativo:'bg-green',Finalizado:'bg-gray',Pausado:'bg-amber',Proposta:'bg-blue',Descontinuado:'bg-gray','A receber':'bg-amber','Inadimplência':'bg-red' }
 const badge = (t,c) => `<span class="badge ${statusMap[t]||c||'bg-gray'}">${t||'—'}</span>`
 const contaBadge = c => c==='jurídica'?`<span class="badge bg-blue">PJ</span>`:`<span class="badge bg-oat">PF</span>`
@@ -655,15 +655,19 @@ function closeDrawer(){
 function normalizaMesAno(v){
   if(!v) return ''
   const s = String(v).trim()
+  // DD/MM/YYYY (ex: "01/10/2022", "01/1/2023") — formato real do banco
+  if(/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)){
+    const parts = s.split('/')
+    const m = parts[1].padStart(2,'0')
+    const y = parts[2]
+    return `${m}/${y}`
+  }
   // YYYY-MM (ex: "2025-03")
   if(/^\d{4}-\d{2}$/.test(s)){ const [y,m]=s.split('-'); return `${m}/${y}` }
   // YYYY/MM (ex: "2025/03")
   if(/^\d{4}\/\d{2}$/.test(s)){ const [y,m]=s.split('/'); return `${m}/${y}` }
-  // MM/YYYY (ex: "03/2025") — já correto
-  if(/^\d{2}\/\d{4}$/.test(s)) return s
-  // Caso genérico: se a primeira parte tem 4 dígitos, inverte
-  const parts = s.split(/[-\/]/)
-  if(parts.length===2 && parts[0].length===4) return `${parts[1].padStart(2,'0')}/${parts[0]}`
+  // MM/YYYY legado (ex: "03/2026") — registros cadastrados antes da correção
+  if(/^\d{2}\/\d{4}$/.test(s)){ const [m,y]=s.split('/'); return `${m}/${y}` }
   return s
 }
 
@@ -1448,7 +1452,7 @@ function mEntrada(d=null){
     ${fld('Conta',`<select id="m-conta" onchange="togglePFNotice()"><option value="pessoal">PF (pessoal)</option><option value="jurídica">PJ (jurídica)</option></select>`)}
     ${fld('Forma Pagamento',sel('m-forma',['PIX','TED','Boleto','Cartão']))}
     ${fld('Status',sel('m-status',['Pago','A Receber','Atrasado']))}
-    ${fld('Mês/Ano','<input id="m-mes" placeholder="03/2026">')}
+    ${fld('Mês/Ano','<input id="m-mes" placeholder="01/03/2026">')}
   </div>
   <div id="pf-notice" style="display:none;margin:8px 0 4px;padding:11px 14px;background:#FEF3E2;border:1px solid #F0C070;border-radius:3px;font-size:11px;color:#7A5000;line-height:1.6">
     ⚠️ <strong>Entrada PF:</strong> uma saída <code>[TD] {nome do contrato}</code> será criada automaticamente como <em>retirada de lucros · Ambas</em>, para manter o espelho contábil.
@@ -1474,7 +1478,7 @@ function mSaida(d=null){
     ${fld('Conta',sel('m-conta',[{v:'pessoal',l:'PF (pessoal)'},{v:'jurídica',l:'PJ (jurídica)'}]))}
     ${fld('Sócia',sel('m-socia',[{v:'',l:'— Nenhuma —'},'Fernanda','Laís','Ambas']))}
     ${fld('Status',sel('m-status',['Pago','A Pagar']))}
-    ${fld('Mês/Ano','<input id="m-mes" placeholder="03/2026">')}
+    ${fld('Mês/Ano','<input id="m-mes" placeholder="01/03/2026">')}
   </div>
   <div class="modal-actions">
     ${d?`<button class="btn-delete" onclick="deleteItem('saida',${d.id})">🗑 Apagar</button>`:''}
@@ -1518,7 +1522,7 @@ function mRetirada(d=null){
     ${fld('Data','<input id="m-data" type="date">')}
     ${fld('Conta',sel('m-conta',[{v:'pessoal',l:'PF (pessoal)'},{v:'jurídica',l:'PJ (jurídica)'}]))}
     ${fld('Status',sel('m-status',['Pago','A Pagar']))}
-    ${fld('Mês/Ano','<input id="m-mes" placeholder="03/2026">')}
+    ${fld('Mês/Ano','<input id="m-mes" placeholder="01/03/2026">')}
   </div>
   <div class="modal-actions"><button class="btn-cancel" onclick="closeModal()">Cancelar</button><button class="btn-save" onclick="saveRetirada()">Salvar</button></div>`
 }
@@ -1634,7 +1638,7 @@ async function saveRT(id){
   const ficouPago = (!id && status==='Pago') || (id && eraAReceber && status==='Pago')
 
   if(isPF && ficouPago && nomeContrato){
-    const mes = data ? `${String(new Date(data+'T12:00:00').getMonth()+1).padStart(2,'0')}/${new Date(data+'T12:00:00').getFullYear()}` : mesAtual()
+    const mes = data ? `01/${String(new Date(data+'T12:00:00').getMonth()+1).padStart(2,'0')}/${new Date(data+'T12:00:00').getFullYear()}` : mesAtual()
     const descricaoTD = `[TD] ${nomeContrato}`
     const jaExiste = S.some(s=>s.descricao===descricaoTD && Math.abs((s.valor||0)-vr)<0.01 && s.data_pagamento===data)
     if(!jaExiste){
@@ -1991,7 +1995,7 @@ async function importarCSV(){
 
   for(const r of paraImportar){
     const [d,m,y] = r.data.split('-')
-    const mesAno = d&&m&&y ? `${m}/${y}` : mesAtual()
+    const mesAno = d&&m&&y ? `01/${m}/${y}` : mesAtual()
     const vinculo = r.vinculo || ''
     const [cid, cnome] = vinculo ? vinculo.split('|') : [null,null]
     const proj = cnome ? P.find(p=>p.nome_contrato===cnome) : null

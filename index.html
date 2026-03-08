@@ -654,10 +654,17 @@ function closeDrawer(){
 // Normaliza qualquer formato de mes_ano para MM/YYYY
 function normalizaMesAno(v){
   if(!v) return ''
-  if(/^\d{4}-\d{2}$/.test(v)){ const [y,m]=v.split('-'); return `${m}/${y}` }  // YYYY-MM → MM/YYYY
-  if(/^\d{2}\/\d{4}$/.test(v)) return v  // já MM/YYYY
-  if(/^\d{4}\/\d{2}$/.test(v)){ const [y,m]=v.split('/'); return `${m}/${y}` }  // YYYY/MM → MM/YYYY
-  return v
+  const s = String(v).trim()
+  // YYYY-MM (ex: "2025-03")
+  if(/^\d{4}-\d{2}$/.test(s)){ const [y,m]=s.split('-'); return `${m}/${y}` }
+  // YYYY/MM (ex: "2025/03")
+  if(/^\d{4}\/\d{2}$/.test(s)){ const [y,m]=s.split('/'); return `${m}/${y}` }
+  // MM/YYYY (ex: "03/2025") — já correto
+  if(/^\d{2}\/\d{4}$/.test(s)) return s
+  // Caso genérico: se a primeira parte tem 4 dígitos, inverte
+  const parts = s.split(/[-\/]/)
+  if(parts.length===2 && parts[0].length===4) return `${parts[1].padStart(2,'0')}/${parts[0]}`
+  return s
 }
 
 // Garante que todos os registros em memória tenham mes_ano normalizado
@@ -1178,17 +1185,23 @@ function renderFinanceiro(){
   // Fluxo mensal — todos os meses únicos que têm dados em E ou S
   const todosMeses = [...new Set([...E, ...S].map(r=>r.mes_ano).filter(Boolean))]
     .sort((a,b)=>{
-      // Ordena MM/YYYY desc
-      const [ma,ya] = a.split('/'); const [mb,yb] = b.split('/')
-      return (yb-ya)||((mb||0)-(ma||0))
+      // Ambos já normalizados para MM/YYYY após normalizaArrays
+      const [ma,ya] = a.split('/').map(Number)
+      const [mb,yb] = b.split('/').map(Number)
+      return (yb-ya)||(mb-ma)  // desc por ano, depois desc por mês
     })
   // Garante que o mês atual sempre apareça mesmo sem dados
   const mesAtualVal = mesAtual()
   if(!todosMeses.includes(mesAtualVal)) todosMeses.unshift(mesAtualVal)
 
   document.getElementById('fin-fluxo-tbody').innerHTML = todosMeses.map(mesAno=>{
-    const [m,y] = mesAno.split('/')
-    const label = new Date(y, m-1, 1).toLocaleDateString('pt-BR',{month:'short',year:'numeric'})
+    // mesAno sempre MM/YYYY após normalizaArrays
+    const parts = mesAno.split('/')
+    const mm = parseInt(parts[0])-1   // 0-indexed month
+    const yyyy = parseInt(parts[1])
+    const label = (!isNaN(mm) && !isNaN(yyyy))
+      ? new Date(yyyy, mm, 1).toLocaleDateString('pt-BR',{month:'short',year:'numeric'})
+      : mesAno
     const entradas = E.filter(e=>e.mes_ano===mesAno && e.status==='Pago').reduce((a,e)=>a+(e.valor||0),0)
     const saidas   = S.filter(s=>s.mes_ano===mesAno && s.status==='Pago').reduce((a,s)=>a+(s.valor||0),0)
     const fl = entradas - saidas

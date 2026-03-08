@@ -528,7 +528,7 @@ tbody tr:hover{background:#FAFAF8;}
       <option value="Finalizado">Finalizado</option>
     </select>
     <button class="btn-bulk btn-bulk-status" onclick="bulkUpdateStatus()">Aplicar</button>
-    <button class="btn-bulk" style="border:1px solid #888" onclick="bulkDuplicate()">⧉ Duplicar selecionados</button>
+    <button class="btn-bulk" style="border:1px solid #888" onclick="bulkDuplicate()">⧉ Duplicar</button>
     <button class="btn-bulk btn-bulk-del" onclick="bulkDelete()">🗑 Apagar selecionados</button>
     <button class="btn-bulk btn-bulk-cancel" style="border:1px solid #555" onclick="clearSelection()">Cancelar</button>
   </div>
@@ -618,6 +618,7 @@ async function loadData(){
     db.from('contas_bancarias').select('*').order('nome',{ascending:true}),
   ])
   P=p.data||[]; E=e.data||[]; S=s.data||[]; R=r.data||[]; F=f.data||[]; C=c.data||[]
+  normalizaArrays()
 }
 
 // ═══════════════════════════════════════════════
@@ -649,8 +650,23 @@ function closeDrawer(){
 // ═══════════════════════════════════════════════
 // FLUXO CALCULADO EM TEMPO REAL
 // ═══════════════════════════════════════════════
+
+// Normaliza qualquer formato de mes_ano para MM/YYYY
+function normalizaMesAno(v){
+  if(!v) return ''
+  if(/^\d{4}-\d{2}$/.test(v)){ const [y,m]=v.split('-'); return `${m}/${y}` }  // YYYY-MM → MM/YYYY
+  if(/^\d{2}\/\d{4}$/.test(v)) return v  // já MM/YYYY
+  if(/^\d{4}\/\d{2}$/.test(v)){ const [y,m]=v.split('/'); return `${m}/${y}` }  // YYYY/MM → MM/YYYY
+  return v
+}
+
+// Garante que todos os registros em memória tenham mes_ano normalizado
+function normalizaArrays(){
+  E.forEach(e=>{ e.mes_ano=normalizaMesAno(e.mes_ano) })
+  S.forEach(s=>{ s.mes_ano=normalizaMesAno(s.mes_ano) })
+}
+
 function calcFluxoMeses(nMeses=6){
-  // Gera os últimos N meses (inclusive o atual)
   const hoje = new Date()
   const meses = []
   for(let i=nMeses-1; i>=0; i--){
@@ -1159,14 +1175,27 @@ function renderFinanceiro(){
     <td><button class="btn-edit" onclick="editItem('saida',${s.id})">Editar</button></td>
   </tr>`).join('') || '<tr><td colspan="10" class="empty">Nenhuma saída</td></tr>'
 
-  // Fluxo mensal calculado em tempo real (últimos 24 meses)
-  const fluxoCalc = calcFluxoMeses(24).reverse()  // mais recente primeiro
-  document.getElementById('fin-fluxo-tbody').innerHTML = fluxoCalc.map(m=>{
-    const fl = m.saldo
+  // Fluxo mensal — todos os meses únicos que têm dados em E ou S
+  const todosMeses = [...new Set([...E, ...S].map(r=>r.mes_ano).filter(Boolean))]
+    .sort((a,b)=>{
+      // Ordena MM/YYYY desc
+      const [ma,ya] = a.split('/'); const [mb,yb] = b.split('/')
+      return (yb-ya)||((mb||0)-(ma||0))
+    })
+  // Garante que o mês atual sempre apareça mesmo sem dados
+  const mesAtualVal = mesAtual()
+  if(!todosMeses.includes(mesAtualVal)) todosMeses.unshift(mesAtualVal)
+
+  document.getElementById('fin-fluxo-tbody').innerHTML = todosMeses.map(mesAno=>{
+    const [m,y] = mesAno.split('/')
+    const label = new Date(y, m-1, 1).toLocaleDateString('pt-BR',{month:'short',year:'numeric'})
+    const entradas = E.filter(e=>e.mes_ano===mesAno && e.status==='Pago').reduce((a,e)=>a+(e.valor||0),0)
+    const saidas   = S.filter(s=>s.mes_ano===mesAno && s.status==='Pago').reduce((a,s)=>a+(s.valor||0),0)
+    const fl = entradas - saidas
     return `<tr>
-      <td class="td-bold">${m.label}</td>
-      <td class="td-money td-green">${fmt(m.entradas)}</td>
-      <td class="td-money td-red">${fmt(m.saidas)}</td>
+      <td class="td-bold">${label}</td>
+      <td class="td-money td-green">${fmt(entradas)}</td>
+      <td class="td-money td-red">${fmt(saidas)}</td>
       <td class="td-money ${fl>=0?'td-green':'td-red'}">${fl>=0?'+':''}${fmt(fl)}</td>
       <td class="td-money" style="color:var(--warm-gray)">—</td>
       <td class="td-money" style="color:var(--warm-gray)">—</td>

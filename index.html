@@ -1101,7 +1101,8 @@ function openModal(type, data=null){
   const map={projeto:mProjeto,entrada:mEntrada,saida:mSaida,rt:mRT,retirada:mRetirada}
   document.getElementById('modal-content').innerHTML = map[type]?.(data)||''
   document.getElementById('modal-overlay').classList.add('open')
-  if(data) setTimeout(()=>preenchModal(type,data),50)
+  if(data) setTimeout(()=>{ preenchModal(type,data); if(type==='entrada') togglePFNotice() },50)
+  else if(type==='entrada') setTimeout(togglePFNotice, 50)
 }
 function closeModal(){document.getElementById('modal-overlay').classList.remove('open')}
 
@@ -1145,6 +1146,11 @@ function preenchModal(type, data){
 
 function fld(label,html,full){return `<div class="field${full?' full':''}""><label>${label}</label>${html}</div>`}
 function sel(id,opts,cur=''){return `<select id="${id}">${opts.map(o=>{const v=typeof o==='string'?o:o.v,l=typeof o==='string'?o:o.l;return`<option value="${v}"${v===cur?' selected':''}>${l}</option>`}).join('')}</select>`}
+function togglePFNotice(){
+  const conta = document.getElementById('m-conta')?.value
+  const notice = document.getElementById('pf-notice')
+  if(notice) notice.style.display = (conta==='pessoal'||conta==='PF') ? 'block' : 'none'
+}
 
 function mProjeto(d=null){
   return `<h3>${d?'Editar Projeto':'Novo Projeto'}</h3><div class="modal-divider"></div>
@@ -1184,10 +1190,13 @@ function mEntrada(d=null){
     ${fld('Tipo',sel('m-tipo',[{v:'projeto',l:'Projeto'},{v:'rt',l:'RT/Comissão'}]))}
     ${fld('Valor (R$)','<input id="m-valor" type="number" step="0.01">')}
     ${fld('Data Pagamento','<input id="m-data" type="date">')}
-    ${fld('Conta',sel('m-conta',[{v:'pessoal',l:'PF (pessoal)'},{v:'jurídica',l:'PJ (jurídica)'}]))}
+    ${fld('Conta',`<select id="m-conta" onchange="togglePFNotice()"><option value="pessoal">PF (pessoal)</option><option value="jurídica">PJ (jurídica)</option></select>`)}
     ${fld('Forma Pagamento',sel('m-forma',['PIX','TED','Boleto','Cartão']))}
     ${fld('Status',sel('m-status',['Pago','Pendente','Atrasado']))}
     ${fld('Mês/Ano','<input id="m-mes" placeholder="03/2026">')}
+  </div>
+  <div id="pf-notice" style="display:none;margin:8px 0 4px;padding:11px 14px;background:#FEF3E2;border:1px solid #F0C070;border-radius:3px;font-size:11px;color:#7A5000;line-height:1.6">
+    ⚠️ <strong>Entrada PF:</strong> uma saída <code>[TD] {nome do contrato}</code> será criada automaticamente como <em>retirada de lucros · Ambas</em>, para manter o espelho contábil.
   </div>
   ${fld('Observações','<textarea id="m-obs" rows="2"></textarea>',true)}
   <div class="modal-actions">
@@ -1278,17 +1287,49 @@ async function saveProjeto(id){
 async function saveEntrada(id){
   const nome = g('m-contrato-nome') || (() => { const s=g('m-cont'); return P.find(p=>p.nome_contrato===s)?.nome_contrato||s })()
   const proj = P.find(p=>p.nome_contrato===nome)
+  const conta = g('m-conta')
+  const valor = parseFloat(g('m-valor'))||0
+  const data = g('m-data')||null
+  const mes = g('m-mes')
+  const status = g('m-status')
+  const isPF = conta==='pessoal' || conta==='PF'
+
   const payload = {
     contrato_id:proj?.id||null, nome_contrato:nome, cliente:proj?.cliente||'',
-    tipo_entrada:g('m-tipo'), valor:parseFloat(g('m-valor'))||0,
-    data_pagamento:g('m-data')||null, conta:g('m-conta'), forma_pagto:g('m-forma'),
-    status:g('m-status'), mes_ano:g('m-mes'), obs:g('m-obs')
+    tipo_entrada:g('m-tipo'), valor, data_pagamento:data, conta,
+    forma_pagto:g('m-forma'), status, mes_ano:mes, obs:g('m-obs')
   }
-  const {error} = id
-    ? await db.from('entradas').update(payload).eq('id',id)
-    : await db.from('entradas').insert(payload)
-  if(!error){closeModal();await loadData();renderFinanceiro()}
-  else alert('Erro: '+error.message)
+
+  const {data:entData, error} = id
+    ? await db.from('entradas').update(payload).eq('id',id).select().single()
+    : await db.from('entradas').insert(payload).select().single()
+
+  if(error){ alert('Erro: '+error.message); return }
+
+  // Se PF e é nova entrada (não edição), cria saída [TD] automaticamente
+  if(isPF && !id){
+    const descricaoTD = `[TD] ${nome}`
+    // Verifica se já existe saída [TD] com mesmo nome e valor para evitar duplicata
+    const jaExiste = S.some(s=>s.descricao===descricaoTD && s.valor===valor && s.data_pagamento===data)
+    if(!jaExiste){
+      await db.from('saidas').insert({
+        tipo_saida: 'retirada de lucros',
+        descricao: descricaoTD,
+        valor,
+        data_pagamento: data,
+        conta: 'pessoal',
+        socia: 'Ambas',
+        status,
+        mes_ano: mes,
+        contrato_id: proj?.id||null,
+        nome_contrato: nome
+      })
+    }
+  }
+
+  closeModal()
+  await loadData()
+  renderFinanceiro()
 }
 
 async function saveSaida(id){

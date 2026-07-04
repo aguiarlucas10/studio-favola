@@ -574,7 +574,9 @@ const fmt = v => (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'}
 const fmtD = d => d ? new Date(d+'T12:00:00').toLocaleDateString('pt-BR') : '—'
 const mesAtual = () => { const d=new Date(); return `01/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` }
 const statusMap = { Pago:'bg-green','A Receber':'bg-amber','A Pagar':'bg-amber',Atrasado:'bg-red',Ativo:'bg-green',Finalizado:'bg-gray',Pausado:'bg-amber',Proposta:'bg-blue',Descontinuado:'bg-gray','A receber':'bg-amber','Inadimplência':'bg-red' }
-const badge = (t,c) => `<span class="badge ${statusMap[t]||c||'bg-gray'}">${t||'—'}</span>`
+// Escapa texto vindo do banco/CSV antes de inserir via innerHTML (previne XSS)
+const esc = v => String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')
+const badge = (t,c) => `<span class="badge ${statusMap[t]||c||'bg-gray'}">${esc(t||'—')}</span>`
 const contaBadge = c => c==='jurídica'?`<span class="badge bg-blue">PJ</span>`:`<span class="badge bg-oat">PF</span>`
 const g = id => document.getElementById(id)?.value
 
@@ -603,13 +605,16 @@ async function checkSession(){
 // DATA
 // ═══════════════════════════════════════════════
 let P=[], E=[], S=[], R=[], F=[], C=[]  // C = contas bancárias
+let currentUserId = null, currentUserName = ''
 
 async function initApp(){
   document.getElementById('login-screen').style.display='none'
   document.getElementById('app').style.display='block'
   const {data:{user}} = await db.auth.getUser()
   const {data:u} = await db.from('usuarios').select('nome').eq('id',user.id).single()
-  document.getElementById('user-name').textContent = u?.nome||user.email.split('@')[0]
+  currentUserId = user.id
+  currentUserName = u?.nome||user.email.split('@')[0]
+  document.getElementById('user-name').textContent = currentUserName
   document.getElementById('dash-month').textContent = new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'})
   document.getElementById('socias-month').textContent = mesAtual()
   await loadData()
@@ -787,8 +792,8 @@ function renderDashboard(){
   document.getElementById('dash-proj-receber').innerHTML = comReceber.length
     ? comReceber.map(p=>`<div class="row-item" style="padding:8px 0">
         <div style="min-width:0;flex:1;padding-right:8px">
-          <div class="row-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.nome_contrato}</div>
-          <div class="row-sub">${p.cliente} · ${badge(p.status)}</div>
+          <div class="row-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome_contrato)}</div>
+          <div class="row-sub">${esc(p.cliente)} · ${badge(p.status)}</div>
         </div>
         <div style="text-align:right;white-space:nowrap">
           <div style="font-family:'Libre Baskerville',serif;font-size:13px;color:var(--amber)">${fmt(p.a_receber)}</div>
@@ -803,8 +808,8 @@ function renderDashboard(){
   document.getElementById('dash-rt-list').innerHTML = rtList.length
     ? rtList.map(r=>`<div class="row-item" style="padding:7px 0">
         <div style="min-width:0;flex:1;padding-right:6px">
-          <div class="row-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r.fornecedor||'—'}</div>
-          <div class="row-sub">${r.projeto}</div>
+          <div class="row-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.fornecedor||'—')}</div>
+          <div class="row-sub">${esc(r.projeto)}</div>
         </div>
         <div style="text-align:right;white-space:nowrap;font-family:'Libre Baskerville',serif;font-size:12px;color:var(--amber)">${fmt(r.a_receber)}</div>
       </div>`).join('')
@@ -831,7 +836,7 @@ function renderDashboard(){
         const pct = totalGeralRec > 0 ? (total/totalGeralRec*100) : 0
         return `<div style="padding:10px 0;border-bottom:1px solid var(--cool-gray)">
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px">
-            <span style="font-size:11px;font-weight:600;color:var(--preto-soft)">${tipo}</span>
+            <span style="font-size:11px;font-weight:600;color:var(--preto-soft)">${esc(tipo)}</span>
             <span style="font-family:'Libre Baskerville',serif;font-size:13px;color:var(--amber)">${fmt(total)}</span>
           </div>
           <div style="background:var(--cool-gray);border-radius:2px;height:3px;margin-bottom:4px">
@@ -860,8 +865,8 @@ function renderDashboard(){
     ? custos30.map(s=>`
         <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 18px;border-bottom:1px solid var(--cool-gray)">
           <div style="min-width:0;flex:1;padding-right:12px">
-            <div style="font-size:11px;font-weight:600;color:var(--preto-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.descricao||s.tipo_saida}</div>
-            <div style="font-size:9px;color:var(--warm-gray);margin-top:2px">${fmtD(s.data_pagamento)} · ${s.tipo_saida}${s.socia?' · '+s.socia:''}</div>
+            <div style="font-size:11px;font-weight:600;color:var(--preto-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(s.descricao||s.tipo_saida)}</div>
+            <div style="font-size:9px;color:var(--warm-gray);margin-top:2px">${fmtD(s.data_pagamento)} · ${esc(s.tipo_saida)}${s.socia?' · '+esc(s.socia):''}</div>
           </div>
           <div style="font-family:'Libre Baskerville',serif;font-size:13px;color:var(--red);white-space:nowrap">${fmt(s.valor)}</div>
         </div>`).join('')
@@ -879,8 +884,8 @@ function renderDashboard(){
     ? areceber30.map(e=>`
         <div style="display:flex;justify-content:space-between;align-items:center;padding:9px 18px;border-bottom:1px solid var(--cool-gray)">
           <div style="min-width:0;flex:1;padding-right:12px">
-            <div style="font-size:11px;font-weight:600;color:var(--preto-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${e.nome_contrato||e.cliente||'—'}</div>
-            <div style="font-size:9px;color:var(--warm-gray);margin-top:2px">${fmtD(e.data_pagamento)} · ${e.tipo_entrada||''}${e.conta?' · '+contaBadge(e.conta):''}</div>
+            <div style="font-size:11px;font-weight:600;color:var(--preto-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(e.nome_contrato||e.cliente||'—')}</div>
+            <div style="font-size:9px;color:var(--warm-gray);margin-top:2px">${fmtD(e.data_pagamento)} · ${esc(e.tipo_entrada||'')}${e.conta?' · '+contaBadge(e.conta):''}</div>
           </div>
           <div style="font-family:'Libre Baskerville',serif;font-size:13px;color:var(--emerald);white-space:nowrap">${fmt(e.valor)}</div>
         </div>`).join('')
@@ -902,8 +907,8 @@ function renderContasPanel(){
     ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:14px">
         ${C.map(c=>`
           <div style="border:1px solid var(--border);border-radius:3px;padding:14px 16px;position:relative">
-            <div style="font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--warm-gray);margin-bottom:4px">${c.tipo||'Conta'}</div>
-            <div style="font-size:13px;font-weight:600;color:var(--preto-soft);margin-bottom:6px">${c.nome}</div>
+            <div style="font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--warm-gray);margin-bottom:4px">${esc(c.tipo||'Conta')}</div>
+            <div style="font-size:13px;font-weight:600;color:var(--preto-soft);margin-bottom:6px">${esc(c.nome)}</div>
             <div style="font-family:'Libre Baskerville',serif;font-size:18px;color:var(--emerald)">${fmt(c.saldo_atual||0)}</div>
             ${c.atualizado_em?`<div style="font-size:9px;color:var(--text-muted);margin-top:4px">Atualizado ${fmtD(c.atualizado_em)}</div>`:''}
             <button onclick="editConta(${c.id})" style="position:absolute;top:10px;right:10px;background:none;border:none;font-size:10px;color:var(--warm-gray);cursor:pointer;letter-spacing:.06em">editar</button>
@@ -987,30 +992,30 @@ function dashDetail(type){
     body.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">${ativos.map(p=>{
       const pct = p.valor_contrato ? Math.round(((p.valor_contrato-(p.a_receber||0))/p.valor_contrato)*100) : 0
       return `<div style="border:1px solid var(--border);border-radius:3px;padding:14px;cursor:pointer" onclick="editItem('projeto',${p.id})">
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:600">${p.nome_contrato}</span>${contaBadge(p.conta)}</div>
-        <div style="font-size:11px;color:var(--warm-gray);margin-bottom:8px">${p.cliente}</div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:600">${esc(p.nome_contrato)}</span>${contaBadge(p.conta)}</div>
+        <div style="font-size:11px;color:var(--warm-gray);margin-bottom:8px">${esc(p.cliente)}</div>
         <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="color:var(--warm-gray)">A receber</span><span style="font-family:'Libre Baskerville',serif;color:var(--amber)">${fmt(p.a_receber||0)}</span></div>
         <div class="prog"><div class="prog-fill" style="width:${pct}%"></div></div>
-        <div style="font-size:9px;color:var(--warm-gray);margin-top:2px">${pct}% recebido · ${p.cidade||''}</div>
+        <div style="font-size:9px;color:var(--warm-gray);margin-top:2px">${pct}% recebido · ${esc(p.cidade||'')}</div>
       </div>`}).join('')}</div>`
   } else if(type==='areceber'){
     title.textContent = 'A Receber — Todos os Projetos'
     const com = P.filter(p=>(p.a_receber||0)>0).sort((a,b)=>(b.a_receber||0)-(a.a_receber||0))
-    body.innerHTML = `<table style="width:100%;border-collapse:collapse">${com.map(p=>`<tr style="border-bottom:1px solid var(--bg)"><td style="padding:9px 0;font-weight:600;font-size:12px">${p.nome_contrato}</td><td style="color:var(--warm-gray);font-size:11px">${p.cliente}</td><td>${badge(p.status)}</td><td>${contaBadge(p.conta)}</td><td style="text-align:right;font-family:'Libre Baskerville',serif;color:var(--amber)">${fmt(p.a_receber)}</td></tr>`).join('')}</table>`
+    body.innerHTML = `<table style="width:100%;border-collapse:collapse">${com.map(p=>`<tr style="border-bottom:1px solid var(--bg)"><td style="padding:9px 0;font-weight:600;font-size:12px">${esc(p.nome_contrato)}</td><td style="color:var(--warm-gray);font-size:11px">${esc(p.cliente)}</td><td>${badge(p.status)}</td><td>${contaBadge(p.conta)}</td><td style="text-align:right;font-family:'Libre Baskerville',serif;color:var(--amber)">${fmt(p.a_receber)}</td></tr>`).join('')}</table>`
   } else if(type==='receita'){
     title.textContent = 'Entradas do Mês Atual'
     const mes = mesAtual()
     const entMes = E.filter(e=>e.mes_ano===mes)
-    body.innerHTML = entMes.length ? `<table style="width:100%;border-collapse:collapse">${entMes.map(e=>`<tr style="border-bottom:1px solid var(--bg)"><td style="padding:9px 0;font-size:11px;color:var(--warm-gray)">${fmtD(e.data_pagamento)}</td><td style="font-weight:600;font-size:12px">${e.nome_contrato||e.cliente||'—'}</td><td>${badge(e.tipo_entrada||'—')}</td><td>${contaBadge(e.conta)}</td><td style="text-align:right;font-family:'Libre Baskerville',serif;color:var(--emerald)">${fmt(e.valor)}</td></tr>`).join('')}</table>` : '<div class="empty">Sem entradas no mês atual</div>'
+    body.innerHTML = entMes.length ? `<table style="width:100%;border-collapse:collapse">${entMes.map(e=>`<tr style="border-bottom:1px solid var(--bg)"><td style="padding:9px 0;font-size:11px;color:var(--warm-gray)">${fmtD(e.data_pagamento)}</td><td style="font-weight:600;font-size:12px">${esc(e.nome_contrato||e.cliente||'—')}</td><td>${badge(e.tipo_entrada||'—')}</td><td>${contaBadge(e.conta)}</td><td style="text-align:right;font-family:'Libre Baskerville',serif;color:var(--emerald)">${fmt(e.valor)}</td></tr>`).join('')}</table>` : '<div class="empty">Sem entradas no mês atual</div>'
   } else if(type==='rt'){
     title.textContent = 'RT a Receber — Detalhado'
     const rtAll = R.filter(r=>r.status==='A receber').sort((a,b)=>(b.a_receber||0)-(a.a_receber||0))
-    body.innerHTML = rtAll.length ? `<table style="width:100%;border-collapse:collapse">${rtAll.map(r=>`<tr style="border-bottom:1px solid var(--bg)"><td style="padding:9px 0;font-weight:600;font-size:12px">${r.projeto}</td><td style="color:var(--warm-gray);font-size:11px">${r.fornecedor||'—'}</td><td>${badge(r.categoria||'—')}</td><td>${contaBadge(r.conta)}</td><td style="text-align:right;font-family:'Libre Baskerville',serif;color:var(--amber)">${fmt(r.a_receber)}</td></tr>`).join('')}</table>` : '<div class="empty">Nenhuma RT pendente</div>'
+    body.innerHTML = rtAll.length ? `<table style="width:100%;border-collapse:collapse">${rtAll.map(r=>`<tr style="border-bottom:1px solid var(--bg)"><td style="padding:9px 0;font-weight:600;font-size:12px">${esc(r.projeto)}</td><td style="color:var(--warm-gray);font-size:11px">${esc(r.fornecedor||'—')}</td><td>${badge(r.categoria||'—')}</td><td>${contaBadge(r.conta)}</td><td style="text-align:right;font-family:'Libre Baskerville',serif;color:var(--amber)">${fmt(r.a_receber)}</td></tr>`).join('')}</table>` : '<div class="empty">Nenhuma RT pendente</div>'
   } else if(type==='retiradas'){
     title.textContent = 'Retiradas do Mês Atual'
     const mes = mesAtual()
     const ret = S.filter(s=>s.mes_ano===mes&&['retirada de lucros','pró-labore'].includes(s.tipo_saida))
-    body.innerHTML = ret.length ? `<table style="width:100%;border-collapse:collapse">${ret.map(s=>`<tr style="border-bottom:1px solid var(--bg)"><td style="padding:9px 0;font-size:11px;color:var(--warm-gray)">${fmtD(s.data_pagamento)}</td><td style="font-weight:600;font-size:12px">${s.descricao}</td><td>${s.socia||'—'}</td><td style="text-align:right;font-family:'Libre Baskerville',serif;color:var(--red)">${fmt(s.valor)}</td></tr>`).join('')}</table>` : '<div class="empty">Sem retiradas no mês atual</div>'
+    body.innerHTML = ret.length ? `<table style="width:100%;border-collapse:collapse">${ret.map(s=>`<tr style="border-bottom:1px solid var(--bg)"><td style="padding:9px 0;font-size:11px;color:var(--warm-gray)">${fmtD(s.data_pagamento)}</td><td style="font-weight:600;font-size:12px">${esc(s.descricao)}</td><td>${esc(s.socia||'—')}</td><td style="text-align:right;font-family:'Libre Baskerville',serif;color:var(--red)">${fmt(s.valor)}</td></tr>`).join('')}</table>` : '<div class="empty">Sem retiradas no mês atual</div>'
   }
 }
 
@@ -1040,16 +1045,16 @@ function renderProjetos(){
     <thead><tr><th><input type="checkbox" class="cb-row" onchange="toggleAll('contratos',this)"></th><th>Nº</th><th>Contrato</th><th>Cliente</th><th>Serviço</th><th>Valor</th><th>A Receber</th><th>Conta</th><th>Status</th><th>Cidade</th><th>Origem</th><th></th></tr></thead>
     <tbody>${data.map(p=>`<tr>
       <td><input type="checkbox" class="cb-row" data-table="contratos" data-id="${p.id}" onchange="onCheckChange()"></td>
-      <td class="td-muted">${p.numero||'—'}</td>
-      <td class="td-bold" style="cursor:pointer;max-width:200px" onclick="showProjetoDrawer(${p.id})">${p.nome_contrato}</td>
-      <td style="color:var(--preto-soft)">${p.cliente}</td>
+      <td class="td-muted">${esc(p.numero||'—')}</td>
+      <td class="td-bold" style="cursor:pointer;max-width:200px" onclick="showProjetoDrawer(${p.id})">${esc(p.nome_contrato)}</td>
+      <td style="color:var(--preto-soft)">${esc(p.cliente)}</td>
       <td>${badge(p.servico||'—')}</td>
       <td class="td-money">${fmt(p.valor_contrato)}</td>
       <td class="td-money td-amber">${fmt(p.a_receber||0)}</td>
       <td>${contaBadge(p.conta)}</td>
       <td>${badge(p.status)}</td>
-      <td class="td-muted">${p.cidade||''}${p.uf?'/'+p.uf:''}</td>
-      <td class="td-muted">${p.origem||'—'}</td>
+      <td class="td-muted">${esc(p.cidade||'')}${p.uf?'/'+esc(p.uf):''}</td>
+      <td class="td-muted">${esc(p.origem||'—')}</td>
       <td style="white-space:nowrap"><button class="btn-edit" onclick="editItem('projeto',${p.id})">Editar</button></td>
     </tr>`).join('')}</tbody>
   </table></div>`
@@ -1106,7 +1111,7 @@ function renderResultado(){
         ${resultado.map(p=>{
           const cor = p.resultado>=0 ? 'var(--emerald)' : 'var(--red)'
           return `<tr onclick="showProjetoDrawer(${p.id})" style="cursor:pointer">
-            <td class="td-bold">${p.nome_contrato}</td>
+            <td class="td-bold">${esc(p.nome_contrato)}</td>
             <td>${badge(p.status)}</td>
             <td class="td-money" style="text-align:right">${fmt(p.entradas)}</td>
             <td class="td-money" style="text-align:right;color:var(--amber)">${fmt(p.rtRecebida)}</td>
@@ -1138,10 +1143,10 @@ function renderResultado(){
 function showProjetoDrawer(id){
   const p = P.find(x=>x.id===id); if(!p) return
   openDrawer(p.nome_contrato, `
-    <div class="drawer-row"><span class="drawer-lbl">Cliente</span><span class="drawer-val">${p.cliente}</span></div>
-    <div class="drawer-row"><span class="drawer-lbl">Contato</span><span class="drawer-val">${p.contato||'—'}</span></div>
-    <div class="drawer-row"><span class="drawer-lbl">Tipologia</span><span class="drawer-val">${p.tipologia||'—'}</span></div>
-    <div class="drawer-row"><span class="drawer-lbl">Serviço</span><span class="drawer-val">${p.servico||'—'}</span></div>
+    <div class="drawer-row"><span class="drawer-lbl">Cliente</span><span class="drawer-val">${esc(p.cliente)}</span></div>
+    <div class="drawer-row"><span class="drawer-lbl">Contato</span><span class="drawer-val">${esc(p.contato||'—')}</span></div>
+    <div class="drawer-row"><span class="drawer-lbl">Tipologia</span><span class="drawer-val">${esc(p.tipologia||'—')}</span></div>
+    <div class="drawer-row"><span class="drawer-lbl">Serviço</span><span class="drawer-val">${esc(p.servico||'—')}</span></div>
     <div class="drawer-row"><span class="drawer-lbl">Valor do Contrato</span><span class="drawer-val">${fmt(p.valor_contrato)}</span></div>
     <div class="drawer-row"><span class="drawer-lbl">Parcelas</span><span class="drawer-val">${p.parcelas||1}x</span></div>
     <div class="drawer-row"><span class="drawer-lbl">A Receber</span><span class="drawer-val" style="color:var(--amber)">${fmt(p.a_receber||0)}</span></div>
@@ -1149,10 +1154,10 @@ function showProjetoDrawer(id){
     <div class="drawer-row"><span class="drawer-lbl">Status</span><span class="drawer-val">${badge(p.status)}</span></div>
     <div class="drawer-row"><span class="drawer-lbl">Início</span><span class="drawer-val">${fmtD(p.data_inicio)}</span></div>
     <div class="drawer-row"><span class="drawer-lbl">Fim prev.</span><span class="drawer-val">${fmtD(p.data_fim)}</span></div>
-    <div class="drawer-row"><span class="drawer-lbl">Localidade</span><span class="drawer-val">${p.cidade||''}${p.uf?'/'+p.uf:''}</span></div>
-    <div class="drawer-row"><span class="drawer-lbl">Origem</span><span class="drawer-val">${p.origem||'—'}</span></div>
-    <div class="drawer-row"><span class="drawer-lbl">M²</span><span class="drawer-val">${p.metros_quadrados||'—'}</span></div>
-    ${p.obs?`<div class="drawer-row"><span class="drawer-lbl">Obs</span><span class="drawer-val">${p.obs}</span></div>`:''}
+    <div class="drawer-row"><span class="drawer-lbl">Localidade</span><span class="drawer-val">${esc(p.cidade||'')}${p.uf?'/'+esc(p.uf):''}</span></div>
+    <div class="drawer-row"><span class="drawer-lbl">Origem</span><span class="drawer-val">${esc(p.origem||'—')}</span></div>
+    <div class="drawer-row"><span class="drawer-lbl">M²</span><span class="drawer-val">${esc(p.metros_quadrados||'—')}</span></div>
+    ${p.obs?`<div class="drawer-row"><span class="drawer-lbl">Obs</span><span class="drawer-val">${esc(p.obs)}</span></div>`:''}
     <div style="margin-top:16px"><button class="btn-primary" style="width:100%" onclick="closeDrawer();editItem('projeto',${p.id})">Editar este projeto</button></div>
   `)
 }
@@ -1199,11 +1204,11 @@ function renderFinanceiro(){
   document.getElementById('fin-entradas-tbody').innerHTML = Ef.map(e=>`<tr>
     <td><input type="checkbox" class="cb-row" data-table="entradas" data-id="${e.id}" onchange="onCheckChange()"></td>
     <td class="td-muted">${fmtD(e.data_pagamento)}</td>
-    <td class="td-bold">${e.nome_contrato||'—'}</td>
-    <td class="td-muted">${e.cliente||'—'}</td>
+    <td class="td-bold">${esc(e.nome_contrato||'—')}</td>
+    <td class="td-muted">${esc(e.cliente||'—')}</td>
     <td>${badge(e.tipo_entrada||'—')}</td>
     <td>${contaBadge(e.conta)}</td>
-    <td class="td-muted">${e.forma_pagto||'—'}</td>
+    <td class="td-muted">${esc(e.forma_pagto||'—')}</td>
     <td class="td-money td-green">${fmt(e.valor)}</td>
     <td>${badge(e.status)}</td>
     <td><button class="btn-edit" onclick="editItem('entrada',${e.id})">Editar</button></td>
@@ -1212,11 +1217,11 @@ function renderFinanceiro(){
   document.getElementById('fin-saidas-tbody').innerHTML = Sf.map(s=>`<tr>
     <td><input type="checkbox" class="cb-row" data-table="saidas" data-id="${s.id}" onchange="onCheckChange()"></td>
     <td class="td-muted">${fmtD(s.data_pagamento)}</td>
-    <td class="td-bold">${s.descricao||'—'}</td>
+    <td class="td-bold">${esc(s.descricao||'—')}</td>
     <td>${badge(s.tipo_saida||'—')}</td>
-    <td>${s.nome_contrato?`<span style="font-size:10px;color:var(--blue);font-weight:600">${s.nome_contrato}</span>`:`<span class="td-muted">Geral</span>`}</td>
+    <td>${s.nome_contrato?`<span style="font-size:10px;color:var(--blue);font-weight:600">${esc(s.nome_contrato)}</span>`:`<span class="td-muted">Geral</span>`}</td>
     <td>${contaBadge(s.conta)}</td>
-    <td class="td-muted">${s.socia||'—'}</td>
+    <td class="td-muted">${esc(s.socia||'—')}</td>
     <td class="td-money td-red">${fmt(s.valor)}</td>
     <td>${badge(s.status)}</td>
     <td><button class="btn-edit" onclick="editItem('saida',${s.id})">Editar</button></td>
@@ -1302,8 +1307,8 @@ function renderRTTable(){
     <thead><tr><th><input type="checkbox" class="cb-row" onchange="toggleAll('rt_comissoes',this)"></th><th>Projeto</th><th>Fornecedor</th><th>Categoria</th><th>Data</th><th>V. Venda</th><th>%RT</th><th>V. RT</th><th>A Receber</th><th>Conta</th><th>Status</th><th></th></tr></thead>
     <tbody>${data.map(r=>`<tr>
       <td><input type="checkbox" class="cb-row" data-table="rt_comissoes" data-id="${r.id}" onchange="onCheckChange()"></td>
-      <td class="td-bold">${r.projeto}</td>
-      <td>${r.fornecedor||'—'}</td>
+      <td class="td-bold">${esc(r.projeto)}</td>
+      <td>${esc(r.fornecedor||'—')}</td>
       <td>${badge(r.categoria||'—')}</td>
       <td class="td-muted">${fmtD(r.data_fechamento)}</td>
       <td class="td-money">${r.valor_venda?fmt(r.valor_venda):'—'}</td>
@@ -1370,9 +1375,9 @@ function renderSocias(){
       const porSocia = s.socia==='Ambas' ? fmt((s.valor||0)/2)+' cada' : fmt(s.valor||0)
       return `<tr>
         <td class="td-muted">${fmtD(s.data_pagamento)}</td>
-        <td>${s.tipo_saida}</td>
-        <td class="td-bold">${s.descricao}</td>
-        <td>${s.socia||'—'}</td>
+        <td>${esc(s.tipo_saida)}</td>
+        <td class="td-bold">${esc(s.descricao)}</td>
+        <td>${esc(s.socia||'—')}</td>
         <td>${contaBadge(s.conta)}</td>
         <td class="td-money td-red">${fmt(s.valor)}</td>
         <td class="td-money" style="color:var(--amber)">${porSocia}</td>
@@ -1497,7 +1502,7 @@ function mProjeto(d=null){
 }
 
 function mEntrada(d=null){
-  const opts = P.map(p=>`<option value="${p.nome_contrato}">${p.nome_contrato}</option>`).join('')
+  const opts = P.map(p=>`<option value="${esc(p.nome_contrato)}">${esc(p.nome_contrato)}</option>`).join('')
   return `<h3>${d?'Editar Entrada':'Nova Entrada'}</h3><div class="modal-divider"></div>
   <div class="mg">
     ${fld('Contrato',`<select id="m-cont"><option value="">— Selecione —</option>${opts}</select>`)}
@@ -1521,7 +1526,7 @@ function mEntrada(d=null){
 }
 
 function mSaida(d=null){
-  const opts = P.map(p=>`<option value="${p.id}|${p.nome_contrato}">${p.nome_contrato}</option>`).join('')
+  const opts = P.map(p=>`<option value="${p.id}|${esc(p.nome_contrato)}">${esc(p.nome_contrato)}</option>`).join('')
   const vincAtual = d?.contrato_id ? `${d.contrato_id}|${d.nome_contrato}` : ''
   return `<h3>${d?'Editar Saída':'Nova Saída'}</h3><div class="modal-divider"></div>
   <div class="mg">
@@ -1543,7 +1548,7 @@ function mSaida(d=null){
 }
 
 function mRT(d=null){
-  const opts = P.map(p=>`<option value="${p.nome_contrato}">${p.nome_contrato}</option>`).join('')
+  const opts = P.map(p=>`<option value="${esc(p.nome_contrato)}">${esc(p.nome_contrato)}</option>`).join('')
   return `<h3>${d?'Editar RT':'Nova RT / Comissão'}</h3><div class="modal-divider"></div>
   <div class="mg">
     ${fld('Projeto',`<select id="m-proj"><option value="">— Selecione —</option>${opts}</select>`)}
@@ -1969,7 +1974,7 @@ function parseCSVLine(line){
 
 function renderImportPreview(){
   const tipo = document.getElementById('csv-tipo').value
-  const projOpts = P.map(p=>`<option value="${p.id}|${p.nome_contrato}">${p.nome_contrato}</option>`).join('')
+  const projOpts = P.map(p=>`<option value="${p.id}|${esc(p.nome_contrato)}">${esc(p.nome_contrato)}</option>`).join('')
   const tipoOpts = tiposSaida.map(t=>`<option value="${t}">${t}</option>`).join('')
 
   const totalImportar = csvRows.filter(r=>!r.ignorar).length
@@ -1999,7 +2004,7 @@ function renderImportPreview(){
           return `<tr id="csv-row-${i}" style="${r.ignorar?'opacity:.35':''}">
             <td><input type="checkbox" ${r.ignorar?'':'checked'} onchange="csvToggleRow(${i},this)"></td>
             <td class="td-muted">${fmtD(r.data)}</td>
-            <td style="max-width:260px;font-size:11px">${r.desc}</td>
+            <td style="max-width:260px;font-size:11px">${esc(r.desc)}</td>
             ${tipo==='extrato'?`<td><span class="badge ${r.isEntrada?'bg-green':'bg-red'}">${r.isEntrada?'Entrada':'Saída'}</span></td>`:''}
             <td>
               ${tipo==='extrato'&&r.isEntrada
@@ -2117,9 +2122,13 @@ function checkAjustePendente(){
   if(!banner) return
   if(!pendente){ banner.style.display='none'; return }
 
-  const usuarioAtual = document.getElementById('user-name')?.textContent || ''
-  const jaSolicitou = pendente.solicitado_por && usuarioAtual.toLowerCase().includes(pendente.solicitado_por.toLowerCase())
-  const jaAprovou   = pendente.aprovado_por   && usuarioAtual.toLowerCase().includes(pendente.aprovado_por.toLowerCase())
+  // Identidade por ID autenticado; fallback por nome só para registros antigos sem ID
+  const jaSolicitou = pendente.solicitado_por_id
+    ? pendente.solicitado_por_id === currentUserId
+    : !!(pendente.solicitado_por && currentUserName.toLowerCase().includes(pendente.solicitado_por.toLowerCase()))
+  const jaAprovou = pendente.aprovado_por_id
+    ? pendente.aprovado_por_id === currentUserId
+    : !!(pendente.aprovado_por && currentUserName.toLowerCase().includes(pendente.aprovado_por.toLowerCase()))
   const podeAprovar = !jaSolicitou && !jaAprovou
 
   banner.style.display = 'flex'
@@ -2127,8 +2136,8 @@ function checkAjustePendente(){
     <div style="flex:1;min-width:0">
       <div style="font-size:11px;font-weight:600;margin-bottom:2px">⏳ Ajuste de caixa aguardando aprovação</div>
       <div style="font-size:10px;opacity:.85">
-        Solicitado por <strong>${pendente.solicitado_por}</strong> · Novo saldo: <strong>${fmt(pendente.valor_novo)}</strong>
-        ${pendente.motivo ? ` · ${pendente.motivo}` : ''}
+        Solicitado por <strong>${esc(pendente.solicitado_por)}</strong> · Novo saldo: <strong>${fmt(pendente.valor_novo)}</strong>
+        ${pendente.motivo ? ` · ${esc(pendente.motivo)}` : ''}
       </div>
     </div>
     <div style="display:flex;gap:8px;flex-shrink:0">
@@ -2185,14 +2194,14 @@ async function solicitarAjusteCaixa(){
   const diferenca = novoSaldo - saldoAtual
   if(Math.abs(diferenca) < 0.01){ alert('Saldo já está correto, nenhum ajuste necessário.'); return }
 
-  const nomeUsuario = document.getElementById('user-name')?.textContent || 'Desconhecido'
   const { error } = await db.from('ajustes_caixa').insert({
     valor_novo: novoSaldo,
     valor_anterior: saldoAtual,
     diferenca,
     motivo,
     data_referencia: data || null,
-    solicitado_por: nomeUsuario,
+    solicitado_por: currentUserName,
+    solicitado_por_id: currentUserId,
     status: 'pendente'
   })
   if(error){ alert('Erro ao solicitar: '+error.message); return }
@@ -2211,10 +2220,14 @@ async function solicitarAjusteCaixa(){
 async function responderAjuste(id, decisao){
   const ajuste = AJ.find(a=>a.id===id)
   if(!ajuste) return
-  const nomeUsuario = document.getElementById('user-name')?.textContent || 'Desconhecido'
+  // Quem solicitou não pode aprovar o próprio ajuste (validado pelo ID autenticado)
+  if(ajuste.solicitado_por_id && ajuste.solicitado_por_id === currentUserId){
+    alert('Você solicitou este ajuste — apenas a outra sócia pode aprová-lo ou rejeitá-lo.')
+    return
+  }
 
   if(decisao === 'rejeitado'){
-    const { error } = await db.from('ajustes_caixa').update({ status:'rejeitado', aprovado_por: nomeUsuario, updated_at: new Date().toISOString() }).eq('id',id)
+    const { error } = await db.from('ajustes_caixa').update({ status:'rejeitado', aprovado_por: currentUserName, aprovado_por_id: currentUserId, updated_at: new Date().toISOString() }).eq('id',id)
     if(error){ alert('Erro: '+error.message); return }
     await loadAjustes(); checkAjustePendente()
     return
@@ -2232,7 +2245,7 @@ async function responderAjuste(id, decisao){
       nome_contrato: null, cliente: null, tipo_entrada: 'ajuste de caixa',
       valor: diferenca, data_pagamento: data, conta: 'jurídica',
       forma_pagto: 'Ajuste', status: 'Pago', mes_ano: mes,
-      obs: `[Ajuste de Caixa] ${motivo||''} · aprovado por ${ajuste.solicitado_por} e ${nomeUsuario}`
+      obs: `[Ajuste de Caixa] ${motivo||''} · aprovado por ${ajuste.solicitado_por} e ${currentUserName}`
     })
     errAjuste = r.error
   } else {
@@ -2240,14 +2253,14 @@ async function responderAjuste(id, decisao){
       tipo_saida: 'ajuste de caixa', descricao: `[Ajuste de Caixa] ${motivo||'Conciliação'}`,
       valor: Math.abs(diferenca), data_pagamento: data, conta: 'jurídica',
       socia: 'Ambas', status: 'Pago', mes_ano: mes,
-      obs: `Aprovado por ${ajuste.solicitado_por} e ${nomeUsuario}`
+      obs: `Aprovado por ${ajuste.solicitado_por} e ${currentUserName}`
     })
     errAjuste = r.error
   }
   if(errAjuste){ alert('Erro ao aplicar ajuste: '+errAjuste.message); return }
 
   // Marca como aprovado
-  await db.from('ajustes_caixa').update({ status:'aprovado', aprovado_por: nomeUsuario, updated_at: new Date().toISOString() }).eq('id',id)
+  await db.from('ajustes_caixa').update({ status:'aprovado', aprovado_por: currentUserName, aprovado_por_id: currentUserId, updated_at: new Date().toISOString() }).eq('id',id)
 
   await loadData(); await loadAjustes()
   renderDashboard(); checkAjustePendente()

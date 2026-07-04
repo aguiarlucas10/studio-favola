@@ -2,44 +2,44 @@
 // ═══════════════════════════════════════════════
 // FINANCEIRO
 // ═══════════════════════════════════════════════
-let finFilter='Todos'
+let finFilter='entradas'
+const finExpandido = new Set()   // grupos de contrato expandidos (A receber)
+let finEspelhosVisiveis = false  // bloco de espelhos [TD] recolhido por padrão
+
+// Espelho automático = saída [TD] gerada quando um pagamento cai na conta PF
+const isEspelho = s => (s.descricao||'').trim().toUpperCase().startsWith('[TD]')
+const isPago = r => r.status==='Pago'
+
 function filterFin(f,btn){
   finFilter=f
   document.querySelectorAll('#fin-filter-bar .filter-btn').forEach(b=>b.classList.remove('active'))
   btn.classList.add('active')
-  const showE = f==='Todos'||f==='entradas'
-  const showS = f==='Todos'||f==='saidas'
-  const showF = f==='fluxo'
-  const showC = f==='contas'
-  document.getElementById('fin-entradas-wrap').style.display=showE?'block':'none'
-  document.getElementById('fin-saidas-wrap').style.display=showS?'block':'none'
-  document.getElementById('fin-fluxo-wrap').style.display=showF?'block':'none'
-  document.getElementById('fin-contas-wrap').style.display=showC?'block':'none'
-  if(showC) renderContasFinanceiro()
+  document.getElementById('fin-entradas-wrap').style.display = f==='entradas'?'block':'none'
+  document.getElementById('fin-saidas-wrap').style.display   = f==='saidas'?'block':'none'
+  document.getElementById('fin-fluxo-wrap').style.display    = f==='fluxo'?'block':'none'
+  document.getElementById('fin-contas-wrap').style.display   = f==='contas'?'block':'none'
+  if(f==='contas') renderContasFinanceiro()
+  else renderFinanceiro()
 }
 
-function renderFinanceiro(){
-  // Popula o seletor de meses com todos os meses disponíveis
-  const sel = document.getElementById('fin-mes-filtro')
-  const mesSelecionado = sel ? sel.value : ''
-  const todosMesesDisp = [...new Set([...E, ...S].map(r=>r.mes_ano).filter(Boolean))]
-    .sort((a,b)=>{ const [ma,ya]=a.split('/').map(Number); const [mb,yb]=b.split('/').map(Number); return (yb-ya)||(mb-ma) })
-  if(sel && sel.options.length <= 1){
-    todosMesesDisp.forEach(m=>{
-      const [mm,yy] = m.split('/')
-      const label = new Date(yy, mm-1, 1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'})
-      const opt = document.createElement('option')
-      opt.value = m; opt.textContent = label
-      sel.appendChild(opt)
-    })
-  }
+function toggleFinGrupo(key){
+  if(finExpandido.has(key)) finExpandido.delete(key); else finExpandido.add(key)
+  renderFinanceiro()
+}
+function toggleFinEspelhos(){
+  finEspelhosVisiveis = !finEspelhosVisiveis
+  renderFinanceiro()
+}
 
-  // Filtra E e S pelo mês selecionado (se houver)
-  const Ef = mesSelecionado ? E.filter(e=>e.mes_ano===mesSelecionado) : E
-  const Sf = mesSelecionado ? S.filter(s=>s.mes_ano===mesSelecionado) : S
+// Ordena por data desc (mais recente primeiro)
+const porDataDesc = (a,b) => (b.data_pagamento||'').localeCompare(a.data_pagamento||'')
+// Ordena por data asc (próximo vencimento primeiro)
+const porDataAsc  = (a,b) => (a.data_pagamento||'').localeCompare(b.data_pagamento||'')
 
-  document.getElementById('fin-entradas-tbody').innerHTML = Ef.map(e=>`<tr>
-    <td><input type="checkbox" class="cb-row" data-table="entradas" data-id="${e.id}" onchange="onCheckChange()"></td>
+// Linha de entrada padrão
+function rowEntrada(e, indent){
+  return `<tr>
+    <td${indent?' style="padding-left:26px"':''}><input type="checkbox" class="cb-row" data-table="entradas" data-id="${e.id}" onchange="onCheckChange()"></td>
     <td class="td-muted">${fmtD(e.data_pagamento)}</td>
     <td class="td-bold">${esc(e.nome_contrato||'—')}</td>
     <td class="td-muted">${esc(e.cliente||'—')}</td>
@@ -49,9 +49,58 @@ function renderFinanceiro(){
     <td class="td-money td-green">${fmt(e.valor)}</td>
     <td>${badge(e.status)}</td>
     <td><button class="btn-edit" onclick="editItem('entrada',${e.id})">Editar</button></td>
-  </tr>`).join('') || '<tr><td colspan="10" class="empty">Nenhuma entrada</td></tr>'
+  </tr>`
+}
 
-  document.getElementById('fin-saidas-tbody').innerHTML = Sf.map(s=>`<tr>
+const thEntradas = `<thead><tr><th></th><th>Data</th><th>Contrato</th><th>Cliente</th><th>Tipo</th><th>Conta</th><th>Forma</th><th>Valor</th><th>Status</th><th></th></tr></thead>`
+
+function tabelaRecebido(rows){
+  if(!rows.length) return ''
+  const total = rows.reduce((a,e)=>a+(e.valor||0),0)
+  const body = rows.sort(porDataDesc).map(e=>rowEntrada(e,false)).join('')
+  return painelFin('Recebido', rows.length, total, 'var(--emerald)',
+    `<div class="tbl-wrap"><table>${thEntradas}<tbody>${body}</tbody></table></div>`)
+}
+
+function tabelaAReceber(rows){
+  if(!rows.length) return ''
+  const total = rows.reduce((a,e)=>a+(e.valor||0),0)
+  // Agrupa por contrato (parcelas do mesmo contrato viram uma linha mestre expansível)
+  const grupos = {}
+  rows.forEach(e=>{ const k = e.nome_contrato||`__sem__${e.id}`; (grupos[k] ||= []).push(e) })
+  // Data mais próxima de cada grupo (menor string ISO), para ordenar por vencimento
+  const proxDe = itens => itens.map(x=>x.data_pagamento||'9999').sort()[0]
+  let body = ''
+  Object.entries(grupos)
+    .sort((a,b)=>proxDe(a[1]).localeCompare(proxDe(b[1])))
+    .forEach(([key, itens])=>{
+      if(itens.length === 1){ body += rowEntrada(itens[0], false); return }
+      // Linha mestre do grupo
+      const somaG = itens.reduce((a,e)=>a+(e.valor||0),0)
+      const prox = itens.map(e=>e.data_pagamento).filter(Boolean).sort()[0]
+      const aberto = finExpandido.has(key)
+      const kEsc = key.replace(/'/g,"\\'")
+      body += `<tr style="background:var(--bg);cursor:pointer" onclick="toggleFinGrupo('${esc(kEsc)}')">
+        <td style="text-align:center;color:var(--warm-gray)">${aberto?'▾':'▸'}</td>
+        <td class="td-muted">próx: ${fmtD(prox)}</td>
+        <td class="td-bold">${esc(itens[0].nome_contrato)}</td>
+        <td class="td-muted">${esc(itens[0].cliente||'—')}</td>
+        <td><span class="badge bg-amber">${itens.length} parcelas</span></td>
+        <td>${contaBadge(itens[0].conta)}</td>
+        <td class="td-muted">—</td>
+        <td class="td-money td-amber">${fmt(somaG)}</td>
+        <td>${badge('A Receber')}</td>
+        <td></td>
+      </tr>`
+      if(aberto) body += itens.sort(porDataAsc).map(e=>rowEntrada(e,true)).join('')
+    })
+  return painelFin('A receber', rows.length, total, 'var(--amber)',
+    `<div class="tbl-wrap"><table>${thEntradas}<tbody>${body}</tbody></table></div>`)
+}
+
+// Linha de saída padrão
+function rowSaida(s){
+  return `<tr>
     <td><input type="checkbox" class="cb-row" data-table="saidas" data-id="${s.id}" onchange="onCheckChange()"></td>
     <td class="td-muted">${fmtD(s.data_pagamento)}</td>
     <td class="td-bold">${esc(s.descricao||'—')}</td>
@@ -62,31 +111,93 @@ function renderFinanceiro(){
     <td class="td-money td-red">${fmt(s.valor)}</td>
     <td>${badge(s.status)}</td>
     <td><button class="btn-edit" onclick="editItem('saida',${s.id})">Editar</button></td>
-  </tr>`).join('') || '<tr><td colspan="10" class="empty">Nenhuma saída</td></tr>'
+  </tr>`
+}
+const thSaidas = `<thead><tr><th></th><th>Data</th><th>Descrição</th><th>Tipo</th><th>Vínculo</th><th>Conta</th><th>Sócia</th><th>Valor</th><th>Status</th><th></th></tr></thead>`
 
-  // Fluxo mensal — apenas meses válidos até o mês atual
+function tabelaSaidas(titulo, rows, cor){
+  if(!rows.length) return ''
+  const total = rows.reduce((a,s)=>a+(s.valor||0),0)
+  const body = rows.sort(porDataDesc).map(rowSaida).join('')
+  return painelFin(titulo, rows.length, total, cor,
+    `<div class="tbl-wrap"><table>${thSaidas}<tbody>${body}</tbody></table></div>`)
+}
+
+// Wrapper de painel com título + contagem + total no cabeçalho
+function painelFin(titulo, n, total, cor, inner){
+  return `<div class="panel" style="margin-bottom:14px">
+    <div class="panel-hd">
+      <span class="panel-title">${titulo}</span>
+      <span style="font-size:11px;color:var(--warm-gray)">${n} ${n===1?'lançamento':'lançamentos'} · <strong style="font-family:'Libre Baskerville',serif;color:${cor}">${fmt(total)}</strong></span>
+    </div>
+    ${inner}
+  </div>`
+}
+
+function renderFinanceiro(){
+  // Popula o seletor de meses com todos os meses disponíveis
+  const sel = document.getElementById('fin-mes-filtro')
+  const mesSelecionado = sel ? sel.value : ''
+  if(sel && sel.options.length <= 1){
+    const todosMesesDisp = [...new Set([...E, ...S].map(r=>r.mes_ano).filter(Boolean))]
+      .sort((a,b)=>{ const [ma,ya]=a.split('/').map(Number); const [mb,yb]=b.split('/').map(Number); return (yb-ya)||(mb-ma) })
+    todosMesesDisp.forEach(m=>{
+      const [mm,yy] = m.split('/')
+      const label = new Date(yy, mm-1, 1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'})
+      const opt = document.createElement('option')
+      opt.value = m; opt.textContent = label
+      sel.appendChild(opt)
+    })
+  }
+
+  const Ef = mesSelecionado ? E.filter(e=>e.mes_ano===mesSelecionado) : E
+  const Sf = mesSelecionado ? S.filter(s=>s.mes_ano===mesSelecionado) : S
+
+  // ENTRADAS — Recebido (realizado) e A receber (previsto)
+  const recebido  = Ef.filter(isPago)
+  const aReceber  = Ef.filter(e=>!isPago(e))
+  const entradasHTML = (tabelaRecebido(recebido) + tabelaAReceber(aReceber))
+    || '<div class="empty">Nenhuma entrada</div>'
+  document.getElementById('fin-entradas-wrap').innerHTML = entradasHTML
+
+  // SAÍDAS — separa espelhos automáticos [TD] das saídas de verdade
+  const saidasReais = Sf.filter(s=>!isEspelho(s))
+  const espelhos    = Sf.filter(isEspelho)
+  const pagas    = saidasReais.filter(isPago)
+  const aPagar   = saidasReais.filter(s=>!isPago(s))
+  let saidasHTML = (tabelaSaidas('Pago', pagas, 'var(--red)') + tabelaSaidas('A pagar', aPagar, 'var(--amber)'))
+    || '<div class="empty">Nenhuma saída</div>'
+  if(espelhos.length){
+    const totalEsp = espelhos.reduce((a,s)=>a+(s.valor||0),0)
+    saidasHTML += `<div class="panel" style="margin-bottom:14px">
+      <div class="panel-hd" style="cursor:pointer" onclick="toggleFinEspelhos()">
+        <span class="panel-title">${finEspelhosVisiveis?'▾':'▸'} Espelhos automáticos <span style="font-weight:400;color:var(--warm-gray);font-size:11px">(retiradas [TD] geradas por pagamentos na conta PF)</span></span>
+        <span style="font-size:11px;color:var(--warm-gray)">${espelhos.length} · <strong style="font-family:'Libre Baskerville',serif">${fmt(totalEsp)}</strong></span>
+      </div>
+      ${finEspelhosVisiveis ? `<div class="tbl-wrap"><table>${thSaidas}<tbody>${espelhos.sort(porDataDesc).map(rowSaida).join('')}</tbody></table></div>` : ''}
+    </div>`
+  }
+  document.getElementById('fin-saidas-wrap').innerHTML = saidasHTML
+
+  renderFluxoMensal()
+}
+
+function renderFluxoMensal(){
   const hoje = new Date()
-  const mesAtualNum = hoje.getFullYear() * 100 + (hoje.getMonth() + 1)  // ex: 202603
-
+  const mesAtualNum = hoje.getFullYear() * 100 + (hoje.getMonth() + 1)
   const todosMeses = [...new Set([...E, ...S].map(r=>r.mes_ano).filter(Boolean))]
     .filter(m => {
       const parts = m.split('/')
       if(parts.length !== 2) return false
       const mm = parseInt(parts[0]), yy = parseInt(parts[1])
       if(isNaN(mm)||isNaN(yy)||mm<1||mm>12||yy<2000||yy>2100) return false
-      return yy * 100 + mm <= mesAtualNum  // remove meses futuros
+      return yy * 100 + mm <= mesAtualNum
     })
-    .sort((a,b)=>{
-      const [ma,ya] = a.split('/').map(Number)
-      const [mb,yb] = b.split('/').map(Number)
-      return (yb-ya)||(mb-ma)
-    })
+    .sort((a,b)=>{ const [ma,ya]=a.split('/').map(Number); const [mb,yb]=b.split('/').map(Number); return (yb-ya)||(mb-ma) })
 
-  // Garante mês atual mesmo sem dados
   const mesAtualVal = mesAtual()
   if(!todosMeses.includes(mesAtualVal)) todosMeses.unshift(mesAtualVal)
 
-  // Calcula fluxo de cada mês (ordem cronológica para acumular)
   const mesesCronologicos = [...todosMeses].reverse()
   let saldoAcum = 0
   const fluxoPorMes = {}

@@ -194,8 +194,7 @@
           </div>
 
           <div class="filter-bar" id="fin-filter-bar" style="flex-wrap:wrap;gap:6px">
-            <button class="filter-btn active" onclick="filterFin('Todos',this)">Todos</button>
-            <button class="filter-btn" onclick="filterFin('entradas',this)">Entradas</button>
+            <button class="filter-btn active" onclick="filterFin('entradas',this)">Entradas</button>
             <button class="filter-btn" onclick="filterFin('saidas',this)">Saídas</button>
             <button class="filter-btn" onclick="filterFin('fluxo',this)">Fluxo Mensal</button>
             <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
@@ -216,23 +215,9 @@
               <div class="panel-bd" id="fin-contas-body"><div class="loading">...</div></div>
             </div>
           </div>
-          <div id="fin-entradas-wrap">
-            <div class="tbl-wrap" style="margin-bottom:14px">
-              <table>
-                <thead><tr><th><input type="checkbox" class="cb-row" onchange="toggleAll('entradas',this)"></th><th>Data</th><th>Contrato</th><th>Cliente</th><th>Tipo</th><th>Conta</th><th>Forma</th><th>Valor</th><th>Status</th><th></th></tr></thead>
-                <tbody id="fin-entradas-tbody"></tbody>
-              </table>
-            </div>
-          </div>
-          <div id="fin-saidas-wrap">
-            <div class="tbl-wrap" style="margin-bottom:14px">
-              <table>
-                <thead><tr><th><input type="checkbox" class="cb-row" onchange="toggleAll('saidas',this)"></th><th>Data</th><th>Descrição</th><th>Tipo</th><th>Vínculo</th><th>Conta</th><th>Sócia</th><th>Valor</th><th>Status</th><th></th></tr></thead>
-                <tbody id="fin-saidas-tbody"></tbody>
-              </table>
-            </div>
-          </div>
-          <div id="fin-fluxo-wrap">
+          <div id="fin-entradas-wrap"></div>
+          <div id="fin-saidas-wrap" style="display:none"></div>
+          <div id="fin-fluxo-wrap" style="display:none">
             <div class="tbl-wrap">
               <table>
                 <thead><tr><th>Mês</th><th>Entradas</th><th>Saídas</th><th>Fluxo</th><th>Saldo Acumulado</th><th>Por Sócia</th></tr></thead>

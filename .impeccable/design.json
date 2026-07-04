@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-04T00:00:00.000Z",
+  "title": "Design System: Studio Favola",
+  "extensions": {
+    "colorMeta": {
+      "true-black": { "role": "primary", "displayName": "True Black", "canonical": "#000000" },
+      "ink-black": { "role": "primary", "displayName": "Ink Black", "canonical": "#1a1a1a" },
+      "ledger-green": { "role": "secondary", "displayName": "Ledger Green", "canonical": "#4A7C59" },
+      "ledger-green-tint": { "role": "secondary", "displayName": "Ledger Green Tint", "canonical": "#E8F2EC" },
+      "amber-pending": { "role": "tertiary", "displayName": "Amber Pending", "canonical": "#9A7B3E" },
+      "amber-pending-tint": { "role": "tertiary", "displayName": "Amber Pending Tint", "canonical": "#F5EDD8" },
+      "signal-red": { "role": "tertiary", "displayName": "Signal Red", "canonical": "#8B3A3A" },
+      "signal-red-tint": { "role": "tertiary", "displayName": "Signal Red Tint", "canonical": "#F5E8E8" },
+      "studio-blue": { "role": "tertiary", "displayName": "Studio Blue", "canonical": "#3A5F8B" },
+      "studio-blue-tint": { "role": "tertiary", "displayName": "Studio Blue Tint", "canonical": "#E8EFF5" },
+      "paper-white": { "role": "neutral", "displayName": "Paper White", "canonical": "#FFFFFF" },
+      "canvas-cream": { "role": "neutral", "displayName": "Canvas Cream", "canonical": "#F5F2EC" },
+      "cool-gray": { "role": "neutral", "displayName": "Cool Gray", "canonical": "#E2DED4" },
+      "oat": { "role": "neutral", "displayName": "Oat", "canonical": "#D6D2C4" },
+      "warm-gray": { "role": "neutral", "displayName": "Warm Gray", "canonical": "#716B66" },
+      "border-gray": { "role": "neutral", "displayName": "Border Gray", "canonical": "#DDD9D0" },
+      "muted-taupe": { "role": "neutral", "displayName": "Muted Taupe", "canonical": "#6A635B" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Wordmark FAVOLA na tela de login. Único uso deste tamanho." },
+      "headline": { "displayName": "Headline", "purpose": "Título de página e wordmark reduzido da sidebar." },
+      "title": { "displayName": "Title", "purpose": "Valores monetários, títulos de painel/modal/drawer." },
+      "body": { "displayName": "Body", "purpose": "Texto de tabela, linhas de sócias/drawer, formulários." },
+      "label": { "displayName": "Label", "purpose": "Navegação, rótulos de KPI, cabeçalhos de tabela, badges — o estilo mais repetido do sistema." }
+    },
+    "shadows": [
+      { "name": "kpi-hover", "value": "0 2px 12px rgba(0,0,0,.06)", "purpose": "Resposta ao hover num card de KPI clicável." },
+      { "name": "drawer-overlay", "value": "-4px 0 24px rgba(0,0,0,.1)", "purpose": "Painel de detalhe deslizando sobre o conteúdo." }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "0.2s ease (color/background transitions)", "purpose": "Hover de botões, navegação, inputs." },
+      { "name": "ease-drawer", "value": "0.25s ease (transform)", "purpose": "Entrada/saída do drawer lateral." }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ação principal de cada tela (Novo Projeto, Salvar, Nova RT).",
+      "html": "<button class=\"ds-btn-primary\">+ Novo Projeto</button>",
+      "css": ".ds-btn-primary { background: #1a1a1a; color: #fff; border: none; border-radius: 3px; padding: 9px 18px; font-family: 'Spartan', sans-serif; font-size: 10px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer; transition: background 0.2s; } .ds-btn-primary:hover { background: #1a1a1a; opacity: 0.9; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Ação secundária (Cancelar, Importar CSV).",
+      "html": "<button class=\"ds-btn-secondary\">Cancelar</button>",
+      "css": ".ds-btn-secondary { background: transparent; color: #1a1a1a; border: 1px solid #DDD9D0; border-radius: 3px; padding: 9px 18px; font-family: 'Spartan', sans-serif; font-size: 10px; font-weight: 600; letter-spacing: 0.15em; text-transform: uppercase; cursor: pointer; transition: border-color 0.2s; } .ds-btn-secondary:hover { border-color: #716B66; }"
+    },
+    {
+      "name": "KPI Card",
+      "kind": "card",
+      "refersTo": "kpi-card",
+      "description": "Card de indicador no dashboard, com borda superior colorida por status.",
+      "html": "<div class=\"ds-kpi\"><div class=\"ds-kpi-lbl\">Caixa Atual</div><div class=\"ds-kpi-val\">R$ 45.320,00</div></div>",
+      "css": ".ds-kpi { background: #fff; border-radius: 3px; padding: 13px 14px; border-top: 2px solid #4A7C59; } .ds-kpi-lbl { font-family: 'Spartan', sans-serif; font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase; color: #716B66; margin-bottom: 5px; } .ds-kpi-val { font-family: 'Libre Baskerville', serif; font-size: 16px; color: #4A7C59; }"
+    },
+    {
+      "name": "Status Badge",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Indicador de status (Pago, A Receber, Atrasado, Ativo).",
+      "html": "<span class=\"ds-badge ds-badge-green\">Pago</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 2px; font-family: 'Spartan', sans-serif; font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; } .ds-badge-green { background: #E8F2EC; color: #4A7C59; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Campo de formulário padrão em modais.",
+      "html": "<input class=\"ds-input\" placeholder=\"Ex: Ap Maria e Guilherme\">",
+      "css": ".ds-input { width: 100%; padding: 9px 12px; border: 1px solid #DDD9D0; border-radius: 3px; font-family: 'Spartan', sans-serif; font-size: 12px; color: #1a1a1a; background: #fff; outline: none; transition: border-color 0.2s; } .ds-input:focus { border-color: #716B66; }"
+    },
+    {
+      "name": "Sidebar Nav Item",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Item de navegação lateral; estado ativo vira pílula preta.",
+      "html": "<button class=\"ds-nav-item ds-nav-item-active\">◉ Dashboard</button>",
+      "css": ".ds-nav-item { display: flex; align-items: center; gap: 9px; width: 100%; padding: 9px 11px; border-radius: 3px; font-family: 'Spartan', sans-serif; font-size: 10px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: #716B66; background: none; border: none; cursor: pointer; text-align: left; } .ds-nav-item-active { background: #000; color: #fff; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Ledger Atelier",
+    "overview": "O painel cruza dois mundos: o caderno de contas discreto (ledger) e o gosto de um ateliê de arquitetura. A base é neutra e terrosa — creme, cinza-quente, preto suave — pontuada por uma paleta semântica de status que existe para informar decisão, não para decorar. A serifada Libre Baskerville aparece só nos momentos que merecem peso, enquanto a Spartan uppercase de rastreamento largo cobre praticamente todo o resto.",
+    "keyCharacteristics": [
+      "Paleta terrosa e neutra como base; cor semântica só para status, nunca decorativa.",
+      "Serifa reservada a poucos elementos de peso; Spartan uppercase domina rótulos e navegação.",
+      "Superfícies planas por padrão; hierarquia vem de tipografia e borda superior colorida, não de sombra.",
+      "Densidade alta, otimizado para quem já conhece o domínio."
+    ],
+    "rules": [
+      { "name": "The Status-Only Color Rule", "body": "Verde, âmbar, vermelho e azul só comunicam estado de um dado, nunca decoram um elemento sem status.", "section": "colors" },
+      { "name": "The Ledger Weight Rule", "body": "Serifa só em números que importam e nomes próprios; estrutura e metadado são sempre Spartan uppercase.", "section": "typography" },
+      { "name": "The Quiet Elevation Rule", "body": "Superfícies são planas em repouso; sombra só em drawer, modal e hover temporário de KPI.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do usar serifa só para dinheiro, títulos e o wordmark.",
+      "Do comunicar status só com as quatro cores semânticas, como badge tintado ou borda superior de 2px.",
+      "Do manter superfícies planas em repouso.",
+      "Do manter rótulos e navegação em Spartan uppercase com tracking largo."
+    ],
+    "donts": [
+      "Don't usar azul-marinho, cinza frio ou estética de app de banco.",
+      "Don't usar gradient text, cards idênticos em grade, glassmorphism ou hero-metric.",
+      "Don't introduzir sombra decorativa permanente em cards hoje planos.",
+      "Don't usar border-left/border-right colorido como indicador em novos componentes."
+    ]
+  }
+}

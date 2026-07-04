@@ -40,7 +40,7 @@ async function bulkDelete(){
       for(const tbl of tables){
         const ids = sel.filter(s=>s.table===tbl).map(s=>s.id)
         const {error} = await db.from(tbl).delete().in('id',ids)
-        if(error){ alert('Erro ao apagar: '+error.message); return }
+        if(error){ toast(friendlyError(error), 'error', 6000); return }
       }
       clearSelection()
       await loadData()
@@ -60,7 +60,7 @@ async function bulkUpdateStatus(){
     // Detect the correct status field per table
     const field = tbl==='contratos' ? 'status' : tbl==='rt_comissoes' ? 'status' : 'status'
     const {error} = await db.from(tbl).update({[field]:newStatus}).in('id',ids)
-    if(error){ alert('Erro ao atualizar: '+error.message); return }
+    if(error){ toast(friendlyError(error), 'error', 6000); return }
   }
   clearSelection()
   await loadData()
@@ -84,7 +84,7 @@ async function bulkDuplicate(){
     const registros = ids.map(id=>fonte.find(r=>r.id===id)).filter(Boolean).map(strip)
     if(!registros.length) continue
     const {error} = await db.from(tbl).insert(registros)
-    if(error){ alert('Erro ao duplicar: '+error.message); return }
+    if(error){ toast(friendlyError(error), 'error', 6000); return }
     total += registros.length
   }
 
@@ -92,10 +92,5 @@ async function bulkDuplicate(){
   await loadData()
   tables.forEach(tbl=>reRender[tbl]?.())
 
-  // Feedback
-  const fb = document.createElement('div')
-  fb.style.cssText='position:fixed;top:20px;right:24px;background:var(--preto-soft);color:#fff;padding:12px 20px;border-radius:4px;font-size:12px;font-family:Spartan,sans-serif;letter-spacing:.06em;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.2)'
-  fb.textContent = `⧉ ${total} registro${total>1?'s':''} duplicado${total>1?'s':''}`
-  document.body.appendChild(fb)
-  setTimeout(()=>fb.remove(), 3500)
+  toast(`⧉ ${total} registro${total>1?'s':''} duplicado${total>1?'s':''}`, 'info', 3500)
 }

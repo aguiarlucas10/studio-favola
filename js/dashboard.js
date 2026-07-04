@@ -27,10 +27,6 @@ function renderDashboard(){
       <div class="kpi-val" id="kpi-caixa-val">••••••</div>
       <div class="kpi-sub">saldo acumulado · clique p/ ajustar</div>
     </div>
-    <div class="kpi warm" onclick="dashDetail('receita')">
-      <div class="kpi-lbl">Receita do Mês</div><div class="kpi-val">${fmt(rec)}</div>
-      <div class="kpi-sub">entradas pagas</div><div class="kpi-hint">↗ clique p/ ver</div>
-    </div>
     <div class="kpi amber" onclick="dashDetail('areceber')">
       <div class="kpi-lbl">Projetos a Receber</div><div class="kpi-val">${fmt(totalAreceber)}</div>
       <div class="kpi-sub">todos os contratos</div><div class="kpi-hint">↗ clique p/ ver</div>
@@ -43,6 +39,15 @@ function renderDashboard(){
       <div class="kpi-lbl">RT a Receber</div><div class="kpi-val">${fmt(rtP)}</div>
       <div class="kpi-sub">comissões pendentes</div><div class="kpi-hint">↗ clique p/ ver</div>
     </div>`
+
+  // Receita do mês — vive junto do gráfico de fluxo, não como 5º KPI (evita ler R$ 0,00 como anomalia ao lado de números grandes)
+  const mesLabel = new Date().toLocaleDateString('pt-BR',{month:'long'})
+  document.getElementById('dash-receita-inline').innerHTML = rec > 0
+    ? `<div class="kpi-lbl" style="margin-bottom:1px">Receita do mês</div>
+       <div style="font-family:'Libre Baskerville',serif;font-size:14px;color:var(--emerald);cursor:pointer" onclick="dashDetail('receita')">${fmt(rec)}</div>`
+    : `<div class="kpi-lbl" style="margin-bottom:1px">Receita do mês</div>
+       <div style="font-family:'Libre Baskerville',serif;font-size:14px;color:var(--text-muted)">${fmt(rec)}</div>
+       <div style="font-size:9px;color:var(--text-muted)">nenhuma entrada paga em ${mesLabel}</div>`
 
   // Fluxo de Caixa — calculado em tempo real
   const meses6 = calcFluxoMeses(6)
@@ -249,14 +254,14 @@ async function saveConta(id){
     ? await db.from('contas_bancarias').update(payload).eq('id',id)
     : await db.from('contas_bancarias').insert(payload)
   if(!error){ closeModal(); await loadData(); renderContasPanel(); renderDashboard() }
-  else alert('Erro: '+error.message)
+  else toast(friendlyError(error), 'error', 6000)
 }
 
 async function deleteConta(id){
   confirmDialog('Apagar conta?','O saldo e histórico desta conta serão removidos.',async()=>{
     const {error} = await db.from('contas_bancarias').delete().eq('id',id)
     if(!error){ closeModal(); await loadData(); renderContasPanel(); renderDashboard() }
-    else alert('Erro: '+error.message)
+    else toast(friendlyError(error), 'error', 6000)
   })
 }
 

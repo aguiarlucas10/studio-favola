@@ -19,3 +19,27 @@ const esc = v => String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;')
 const badge = (t,c) => `<span class="badge ${statusMap[t]||c||'bg-gray'}">${esc(t||'—')}</span>`
 const contaBadge = c => c==='jurídica'?`<span class="badge bg-blue">PJ</span>`:`<span class="badge bg-oat">PF</span>`
 const g = id => document.getElementById(id)?.value
+
+// Feedback flutuante on-brand (substitui alert() nativo)
+function toast(msg, type='info', ms=4500){
+  const fb = document.createElement('div')
+  fb.className = `toast toast-${type}`
+  fb.textContent = msg
+  document.body.appendChild(fb)
+  setTimeout(()=>fb.remove(), ms)
+}
+
+// Traduz erros crus do Supabase/Postgres para mensagens que a sócia entende
+function friendlyError(error){
+  const raw = error?.message || String(error||'')
+  const map = [
+    [/row-level security/i, 'Você não tem permissão para fazer isso. Confirme que está logada com a conta certa.'],
+    [/jwt|session|not authenticated/i, 'Sua sessão expirou. Atualize a página e faça login novamente.'],
+    [/duplicate key|already exists/i, 'Já existe um registro com esses dados.'],
+    [/foreign key|violates foreign/i, 'Não foi possível salvar: um registro relacionado não foi encontrado (ex: contrato apagado).'],
+    [/network|fetch|failed to fetch/i, 'Falha de conexão. Verifique sua internet e tente novamente.'],
+    [/null value in column/i, 'Faltou preencher um campo obrigatório.'],
+  ]
+  for(const [re,msg] of map) if(re.test(raw)) return msg
+  return 'Não foi possível concluir a ação. Tente novamente em instantes.'
+}

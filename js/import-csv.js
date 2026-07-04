@@ -182,7 +182,7 @@ async function importarCSV(){
   const tipo = document.getElementById('csv-tipo').value
   const contaGlobal = document.getElementById('csv-conta').value
   const paraImportar = csvRows.filter(r=>!r.ignorar)
-  if(!paraImportar.length){ alert('Nenhuma linha selecionada.'); return }
+  if(!paraImportar.length){ toast('Nenhuma linha selecionada.', 'error'); return }
 
   let entradas=[], saidas=[]
 
@@ -224,17 +224,12 @@ async function importarCSV(){
     if(error){ erros++; console.error('Saídas:', error.message) }
   }
 
-  if(erros){ alert('Alguns registros não foram importados. Verifique o console.'); return }
+  if(erros){ toast('Alguns registros não foram importados. Verifique o console do navegador para detalhes.', 'error', 6000); return }
 
   const msg = `✓ Importados: ${entradas.length} entradas + ${saidas.length} saídas`
   closeImportCSV()
   await loadData()
   renderFinanceiro()
-  // Mostra confirmação inline
-  const fb = document.createElement('div')
-  fb.style.cssText='position:fixed;top:20px;right:24px;background:var(--emerald);color:#fff;padding:12px 20px;border-radius:4px;font-size:12px;font-family:Spartan,sans-serif;letter-spacing:.06em;z-index:999;box-shadow:0 4px 16px rgba(0,0,0,.15)'
-  fb.textContent = msg
-  document.body.appendChild(fb)
-  setTimeout(()=>fb.remove(), 4000)
+  toast(msg, 'success')
 }
 

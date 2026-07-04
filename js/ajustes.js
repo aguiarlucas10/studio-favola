@@ -80,12 +80,12 @@ function openAjusteCaixa(){
 
 async function solicitarAjusteCaixa(){
   const novoSaldo = parseFloat(document.getElementById('aj-valor').value)
-  if(isNaN(novoSaldo)){ alert('Digite o novo saldo.'); return }
+  if(isNaN(novoSaldo)){ toast('Digite o novo saldo.', 'error'); return }
   const motivo = document.getElementById('aj-motivo').value || ''
   const data = document.getElementById('aj-data').value
   const saldoAtual = calcSaldoAcumulado()
   const diferenca = novoSaldo - saldoAtual
-  if(Math.abs(diferenca) < 0.01){ alert('Saldo já está correto, nenhum ajuste necessário.'); return }
+  if(Math.abs(diferenca) < 0.01){ toast('Saldo já está correto, nenhum ajuste necessário.', 'info'); return }
 
   const { error } = await db.from('ajustes_caixa').insert({
     valor_novo: novoSaldo,
@@ -97,17 +97,13 @@ async function solicitarAjusteCaixa(){
     solicitado_por_id: currentUserId,
     status: 'pendente'
   })
-  if(error){ alert('Erro ao solicitar: '+error.message); return }
+  if(error){ toast(friendlyError(error), 'error', 6000); return }
 
   closeModal()
   await loadAjustes()
   checkAjustePendente()
 
-  const fb = document.createElement('div')
-  fb.style.cssText='position:fixed;top:20px;right:24px;background:var(--preto-soft);color:#fff;padding:12px 20px;border-radius:4px;font-size:12px;font-family:Spartan,sans-serif;letter-spacing:.06em;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.15)'
-  fb.textContent = '✓ Solicitação enviada · aguardando aprovação da outra sócia'
-  document.body.appendChild(fb)
-  setTimeout(()=>fb.remove(), 4000)
+  toast('✓ Solicitação enviada · aguardando aprovação da outra sócia', 'info')
 }
 
 async function responderAjuste(id, decisao){
@@ -115,13 +111,13 @@ async function responderAjuste(id, decisao){
   if(!ajuste) return
   // Quem solicitou não pode aprovar o próprio ajuste (validado pelo ID autenticado)
   if(ajuste.solicitado_por_id && ajuste.solicitado_por_id === currentUserId){
-    alert('Você solicitou este ajuste — apenas a outra sócia pode aprová-lo ou rejeitá-lo.')
+    toast('Você solicitou este ajuste: apenas a outra sócia pode aprová-lo ou rejeitá-lo.', 'error')
     return
   }
 
   if(decisao === 'rejeitado'){
     const { error } = await db.from('ajustes_caixa').update({ status:'rejeitado', aprovado_por: currentUserName, aprovado_por_id: currentUserId, updated_at: new Date().toISOString() }).eq('id',id)
-    if(error){ alert('Erro: '+error.message); return }
+    if(error){ toast(friendlyError(error), 'error', 6000); return }
     await loadAjustes(); checkAjustePendente()
     return
   }
@@ -150,7 +146,7 @@ async function responderAjuste(id, decisao){
     })
     errAjuste = r.error
   }
-  if(errAjuste){ alert('Erro ao aplicar ajuste: '+errAjuste.message); return }
+  if(errAjuste){ toast(friendlyError(errAjuste), 'error', 6000); return }
 
   // Marca como aprovado
   await db.from('ajustes_caixa').update({ status:'aprovado', aprovado_por: currentUserName, aprovado_por_id: currentUserId, updated_at: new Date().toISOString() }).eq('id',id)
@@ -158,17 +154,21 @@ async function responderAjuste(id, decisao){
   await loadData(); await loadAjustes()
   renderDashboard(); checkAjustePendente()
 
-  const fb = document.createElement('div')
-  fb.style.cssText='position:fixed;top:20px;right:24px;background:var(--emerald);color:#fff;padding:12px 20px;border-radius:4px;font-size:12px;font-family:Spartan,sans-serif;letter-spacing:.06em;z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.15)'
-  fb.textContent = `✓ Ajuste aprovado e aplicado · novo caixa ${fmt(valor_novo)}`
-  document.body.appendChild(fb)
-  setTimeout(()=>fb.remove(), 5000)
+  toast(`✓ Ajuste aprovado e aplicado · novo caixa ${fmt(valor_novo)}`, 'success', 5000)
 }
 
 function verDetalheAjuste(id){
   const a = AJ.find(x=>x.id===id)
   if(!a) return
   const dif = a.diferenca >= 0 ? `+${fmt(a.diferenca)}` : fmt(a.diferenca)
-  alert(`Ajuste #${a.id}\nSolicitado por: ${a.solicitado_por}\nSaldo anterior: ${fmt(a.valor_anterior)}\nNovo saldo: ${fmt(a.valor_novo)}\nDiferença: ${dif}\nMotivo: ${a.motivo||'—'}\nData ref.: ${a.data_referencia||'—'}\nStatus: ${a.status}`)
+  openDrawer(`Ajuste #${a.id}`, `
+    <div class="drawer-row"><span class="drawer-lbl">Solicitado por</span><span class="drawer-val">${esc(a.solicitado_por)}</span></div>
+    <div class="drawer-row"><span class="drawer-lbl">Saldo anterior</span><span class="drawer-val">${fmt(a.valor_anterior)}</span></div>
+    <div class="drawer-row"><span class="drawer-lbl">Novo saldo</span><span class="drawer-val">${fmt(a.valor_novo)}</span></div>
+    <div class="drawer-row"><span class="drawer-lbl">Diferença</span><span class="drawer-val" style="color:${a.diferenca>=0?'var(--emerald)':'var(--red)'}">${dif}</span></div>
+    <div class="drawer-row"><span class="drawer-lbl">Motivo</span><span class="drawer-val">${esc(a.motivo||'—')}</span></div>
+    <div class="drawer-row"><span class="drawer-lbl">Data ref.</span><span class="drawer-val">${fmtD(a.data_referencia)}</span></div>
+    <div class="drawer-row"><span class="drawer-lbl">Status</span><span class="drawer-val">${badge(a.status)}</span></div>
+  `)
 }
 

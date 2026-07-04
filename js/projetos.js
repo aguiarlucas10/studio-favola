@@ -26,8 +26,8 @@ function renderProjetos(){
     <tbody>${data.map(p=>`<tr>
       <td><input type="checkbox" class="cb-row" data-table="contratos" data-id="${p.id}" onchange="onCheckChange()"></td>
       <td class="td-muted">${esc(p.numero||'—')}</td>
-      <td class="td-bold" style="cursor:pointer;max-width:200px" onclick="showProjetoDrawer(${p.id})">${esc(p.nome_contrato)}</td>
-      <td style="color:var(--preto-soft)">${esc(p.cliente)}</td>
+      <td class="td-bold" style="cursor:pointer;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(p.nome_contrato)}" onclick="showProjetoDrawer(${p.id})">${esc(p.nome_contrato)}</td>
+      <td style="color:var(--preto-soft);max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(p.cliente)}">${esc(p.cliente)}</td>
       <td>${badge(p.servico||'—')}</td>
       <td class="td-money">${fmt(p.valor_contrato)}</td>
       <td class="td-money td-amber">${fmt(p.a_receber||0)}</td>

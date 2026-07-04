@@ -215,7 +215,7 @@ async function saveProjeto(id){
     ? await db.from('contratos').update(payload).eq('id',id)
     : await db.from('contratos').insert(payload)
   if(!error){closeModal();await loadData();renderProjetos()}
-  else alert('Erro: '+error.message)
+  else toast(friendlyError(error), 'error', 6000)
 }
 
 async function saveEntrada(id){
@@ -238,7 +238,7 @@ async function saveEntrada(id){
     ? await db.from('entradas').update(payload).eq('id',id)
     : await db.from('entradas').insert(payload)
 
-  if(error){ alert('Erro: '+error.message); return }
+  if(error){ toast(friendlyError(error), 'error', 6000); return }
 
   // Se PF e é nova entrada, cria saída [TD] automaticamente
   if(isPF && !id){
@@ -271,7 +271,7 @@ async function saveSaida(id){
     ? await db.from('saidas').update(payload).eq('id',id)
     : await db.from('saidas').insert(payload)
   if(!error){closeModal();await loadData();renderFinanceiro()}
-  else alert('Erro: '+error.message)
+  else toast(friendlyError(error), 'error', 6000)
 }
 
 async function saveRT(id){
@@ -303,7 +303,7 @@ async function saveRT(id){
     ? await db.from('rt_comissoes').update(payload).eq('id',id)
     : await db.from('rt_comissoes').insert(payload)
 
-  if(error){ alert('Erro: '+error.message); return }
+  if(error){ toast(friendlyError(error), 'error', 6000); return }
 
   // Automação PF: cria entrada + saída [TD] quando PF e (novo com Pago) ou (edição mudou para Pago)
   const isPF = conta==='pessoal' || conta==='PF'
@@ -340,7 +340,7 @@ async function saveRetirada(){
     conta:g('m-conta'), socia:g('m-socia'), status:g('m-status'), mes_ano:g('m-mes')
   })
   if(!error){closeModal();await loadData();renderSocias()}
-  else alert('Erro: '+error.message)
+  else toast(friendlyError(error), 'error', 6000)
 }
 
 // ═══════════════════════════════════════════════
@@ -358,7 +358,7 @@ function deleteItem(type, id){
       const tbl = tableMap[type]
       const {error} = await db.from(tbl).delete().eq('id',id)
       if(!error){ closeModal(); await loadData(); reRender[tbl]?.() }
-      else alert('Erro ao apagar: '+error.message)
+      else toast(friendlyError(error), 'error', 6000)
     }
   )
 }

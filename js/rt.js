@@ -11,8 +11,10 @@ function filterRT(f,btn){
 }
 
 // Concilia RT com o Financeiro: procura a entrada correspondente a uma comissão paga.
-// Uma RT PF paga gera automaticamente uma entrada tipo 'rt' com o mesmo contrato e valor.
-// Retorna a entrada encontrada, ou null (não paga), ou undefined (paga sem entrada localizada).
+// Uma RT PF paga pelo fluxo novo gera automaticamente uma entrada tipo 'rt' de mesmo
+// contrato e valor. A maioria das comissões (PJ, ou pagas antes dessa automação) não
+// tem entrada separada — a própria RT paga já é o registro do recebimento. Por isso
+// marcamos SÓ o caso positivo (✓ no caixa) e deixamos o resto em branco, sem alarmar.
 function rtEntradaNoCaixa(r){
   if(r.status!=='Pago') return null
   return E.find(e => e.tipo_entrada==='rt'
@@ -40,10 +42,11 @@ function renderRTTable(){
     <tbody>${data.map(r=>{
       const parc = (r.parcelas||1) > 1 ? `<div style="font-size:9px;color:var(--warm-gray)">${r.parcelas} parcelas</div>` : ''
       const ent = rtEntradaNoCaixa(r)
-      let caixa
-      if(ent === null) caixa = '<span class="td-muted">—</span>'                       // não paga
-      else if(ent)     caixa = `<span class="badge bg-green" title="Entrada de ${fmtD(ent.data_pagamento)}">✓ no caixa</span>`
-      else             caixa = '<span class="badge bg-gray" title="Paga, mas sem entrada correspondente lançada">não localizado</span>'
+      // Positivo apenas: marca quando a comissão paga tem entrada vinculada no caixa;
+      // caso contrário fica em branco (a RT paga já é o registro do recebimento).
+      const caixa = ent
+        ? `<span class="badge bg-green" title="Entrada de ${fmtD(ent.data_pagamento)} no Financeiro">✓ no caixa</span>`
+        : '<span class="td-muted">—</span>'
       return `<tr>
       <td><input type="checkbox" class="cb-row" data-table="rt_comissoes" data-id="${r.id}" onchange="onCheckChange()"></td>
       <td class="td-bold">${esc(r.projeto)}</td>

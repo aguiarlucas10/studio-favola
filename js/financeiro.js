@@ -22,7 +22,8 @@ function filterFin(f,btn){
   else renderFinanceiro()
 }
 
-function toggleFinGrupo(key){
+function toggleFinGrupo(encoded){
+  const key = decodeURIComponent(encoded)
   if(finExpandido.has(key)) finExpandido.delete(key); else finExpandido.add(key)
   renderFinanceiro()
 }
@@ -79,8 +80,7 @@ function tabelaAReceber(rows){
       const somaG = itens.reduce((a,e)=>a+(e.valor||0),0)
       const prox = itens.map(e=>e.data_pagamento).filter(Boolean).sort()[0]
       const aberto = finExpandido.has(key)
-      const kEsc = key.replace(/'/g,"\\'")
-      body += `<tr style="background:var(--bg);cursor:pointer" onclick="toggleFinGrupo('${esc(kEsc)}')">
+      body += `<tr style="background:var(--bg);cursor:pointer" onclick="toggleFinGrupo('${encodeURIComponent(key)}')">
         <td style="text-align:center;color:var(--warm-gray)">${aberto?'▾':'▸'}</td>
         <td class="td-muted">próx: ${fmtD(prox)}</td>
         <td class="td-bold">${esc(itens[0].nome_contrato)}</td>

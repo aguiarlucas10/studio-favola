@@ -109,6 +109,18 @@ function calcFluxoMesAtual(){
   return {entradas, saidas}
 }
 
+// "A receber" de um contrato = soma das parcelas (entradas) pendentes daquele contrato.
+// Fonte única da verdade: em vez do campo a_receber digitado à mão, soma as entradas
+// não pagas vinculadas ao contrato (por id ou nome). Exclui RT (contabilizada em rt_comissoes).
+function contratoAReceber(p){
+  if(!p) return 0
+  return E.filter(e =>
+      (e.contrato_id===p.id || e.nome_contrato===p.nome_contrato)
+      && e.status!=='Pago'
+      && e.tipo_entrada!=='rt')
+    .reduce((a,e)=>a+(e.valor||0),0)
+}
+
 // Calcula saldo acumulado total de todos os registros pagos
 function calcSaldoAcumulado(){
   const totalE = E.filter(e=>e.status==='Pago').reduce((a,e)=>a+(e.valor||0),0)

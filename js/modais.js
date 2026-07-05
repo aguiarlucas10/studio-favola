@@ -37,7 +37,7 @@ function preenchModal(type, data){
     set('m-num',data.numero); set('m-nome',data.nome_contrato); set('m-cliente',data.cliente)
     set('m-contato',data.contato); set('m-tipologia',data.tipologia); set('m-servico',data.servico)
     set('m-valor',data.valor_contrato); set('m-parcelas',data.parcelas); set('m-conta',data.conta)
-    set('m-areceber',data.a_receber); set('m-status',data.status); set('m-inicio',data.data_inicio)
+    set('m-status',data.status); set('m-inicio',data.data_inicio)
     set('m-fim',data.data_fim); set('m-cidade',data.cidade); set('m-uf',data.uf)
     set('m-origem',data.origem); set('m-m2',data.metros_quadrados); set('m-obs',data.obs)
     const btn=document.getElementById('modal-save-btn')
@@ -46,13 +46,13 @@ function preenchModal(type, data){
     set('m-cont',data.nome_contrato)
     set('m-tipo',data.tipo_entrada)
     set('m-valor',data.valor); set('m-data',data.data_pagamento); set('m-conta',data.conta)
-    set('m-forma',data.forma_pagto); set('m-status',data.status); set('m-mes',data.mes_ano); set('m-obs',data.obs)
+    set('m-forma',data.forma_pagto); set('m-status',data.status); set('m-obs',data.obs)
     const btn=document.getElementById('modal-save-btn')
     if(btn) btn.onclick=()=>saveEntrada(data.id)
   } else if(type==='saida'){
     set('m-tipo',data.tipo_saida); set('m-desc',data.descricao); set('m-valor',data.valor)
     set('m-data',data.data_pagamento); set('m-conta',data.conta); set('m-socia',data.socia)
-    set('m-status',data.status); set('m-mes',data.mes_ano)
+    set('m-status',data.status)
     // Set vínculo
     if(data.contrato_id){
       const el = document.getElementById('m-vinculo')
@@ -85,6 +85,7 @@ function toggleRTNotice(){
 }
 
 function mProjeto(d=null){
+  const genOnChange = d ? '' : ' onchange="gerarParcelasPreview()"'
   return `<h3>${d?'Editar Projeto':'Novo Projeto'}</h3><div class="modal-divider"></div>
   <div class="mg">
     ${fld('Nº','<input id="m-num" type="number">')}
@@ -93,12 +94,11 @@ function mProjeto(d=null){
     ${fld('Contato','<input id="m-contato">')}
     ${fld('Tipologia',sel('m-tipologia',['Interiores','Arquitetônico','Comercial','Arq + Int']))}
     ${fld('Serviço',sel('m-servico',['Projeto','Consultoria','Detalhamento','Acompanhamento']))}
-    ${fld('Valor do Contrato (R$)','<input id="m-valor" type="number" step="0.01">')}
-    ${fld('A Receber (R$)','<input id="m-areceber" type="number" step="0.01">')}
-    ${fld('Parcelas','<input id="m-parcelas" type="number" value="1">')}
+    ${fld('Valor do Contrato (R$)',`<input id="m-valor" type="number" step="0.01"${genOnChange}>`)}
+    ${fld('Parcelas',`<input id="m-parcelas" type="number" value="1" min="1"${genOnChange}>`)}
     ${fld('Conta',sel('m-conta',[{v:'pessoal',l:'PF (pessoal)'},{v:'jurídica',l:'PJ (jurídica)'}]))}
     ${fld('Status',sel('m-status',['Ativo','Proposta','Pausado','Finalizado','Descontinuado']))}
-    ${fld('Data Início','<input id="m-inicio" type="date">')}
+    ${fld('Data Início',`<input id="m-inicio" type="date"${genOnChange}>`)}
     ${fld('Data Fim','<input id="m-fim" type="date">')}
     ${fld('Cidade','<input id="m-cidade">')}
     ${fld('UF','<input id="m-uf" maxlength="2">')}
@@ -106,11 +106,73 @@ function mProjeto(d=null){
     ${fld('M²','<input id="m-m2">')}
   </div>
   ${fld('Observações','<textarea id="m-obs" rows="2"></textarea>',true)}
+  ${d ? '' : `
+  <div class="modal-divider" style="margin-top:18px"></div>
+  <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--preto-soft);margin-bottom:8px;cursor:pointer">
+    <input type="checkbox" id="m-gerar-parc" checked onchange="toggleParcelasPreview()"> Gerar parcelas previstas (uma entrada "A Receber" por mês)
+  </label>
+  <div id="parcelas-preview" style="font-size:11px;color:var(--warm-gray)">Preencha valor, parcelas e data de início para ver as parcelas.</div>`}
   <div class="modal-actions">
     ${d?`<button class="btn-delete" onclick="deleteItem('projeto',${d.id})">🗑 Apagar</button>`:''}
     <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
     <button class="btn-save" id="modal-save-btn" onclick="saveProjeto(null)">Salvar</button>
   </div>`
+}
+
+// Gera a prévia editável de parcelas a partir de valor + nº parcelas + data de início.
+// Mensais e iguais; a última parcela absorve o arredondamento. Cada linha é editável.
+function gerarParcelasPreview(){
+  const chk = document.getElementById('m-gerar-parc')
+  const box = document.getElementById('parcelas-preview')
+  if(!box) return
+  if(chk && !chk.checked){ box.innerHTML=''; return }
+  const valor = parseFloat(g('m-valor'))||0
+  const n = Math.max(1, parseInt(g('m-parcelas'))||1)
+  const inicio = g('m-inicio')
+  if(!valor || !inicio){ box.innerHTML = '<span>Preencha valor, parcelas e data de início para ver as parcelas.</span>'; return }
+  const base = Math.floor((valor/n)*100)/100
+  const linhas = []
+  const [y,m,dia] = inicio.split('-').map(Number)
+  for(let i=0;i<n;i++){
+    const dt = new Date(y, (m-1)+i, dia||1)
+    const iso = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`
+    const v = i===n-1 ? +(valor-base*(n-1)).toFixed(2) : base
+    linhas.push({iso, v})
+  }
+  box.innerHTML = `
+    <div style="display:flex;justify-content:space-between;margin-bottom:6px"><span>${n} parcela${n>1?'s':''} de ~${fmt(base)}</span><span>Total: <strong>${fmt(valor)}</strong></span></div>
+    <div class="tbl-wrap" style="max-height:200px;overflow-y:auto">
+      <table><thead><tr><th>#</th><th>Vencimento</th><th>Valor</th></tr></thead>
+      <tbody>${linhas.map((l,i)=>`<tr>
+        <td class="td-muted">${i+1}</td>
+        <td><input id="parc-data-${i}" type="date" value="${l.iso}" style="padding:5px 8px;border:1px solid var(--border);border-radius:3px;font-family:'Spartan',sans-serif;font-size:11px"></td>
+        <td><input id="parc-valor-${i}" type="number" step="0.01" value="${l.v}" style="width:110px;padding:5px 8px;border:1px solid var(--border);border-radius:3px;font-family:'Spartan',sans-serif;font-size:11px"></td>
+      </tr>`).join('')}</tbody></table>
+    </div>`
+  box.dataset.n = n
+}
+
+function toggleParcelasPreview(){
+  const chk = document.getElementById('m-gerar-parc')
+  const box = document.getElementById('parcelas-preview')
+  if(!box) return
+  if(chk && chk.checked) gerarParcelasPreview()
+  else box.innerHTML = '<span style="color:var(--warm-gray)">As parcelas serão lançadas manualmente depois.</span>'
+}
+
+// Lê as parcelas da prévia (se ativa) para inserir como entradas.
+function coletarParcelas(){
+  const chk = document.getElementById('m-gerar-parc')
+  const box = document.getElementById('parcelas-preview')
+  if(!chk || !chk.checked || !box || !box.dataset.n) return []
+  const n = parseInt(box.dataset.n)||0
+  const out = []
+  for(let i=0;i<n;i++){
+    const data = document.getElementById(`parc-data-${i}`)?.value || null
+    const valor = parseFloat(document.getElementById(`parc-valor-${i}`)?.value)||0
+    if(valor>0) out.push({ data, valor })
+  }
+  return out
 }
 
 function mEntrada(d=null){
@@ -124,7 +186,6 @@ function mEntrada(d=null){
     ${fld('Conta',`<select id="m-conta" onchange="togglePFNotice()"><option value="pessoal">PF (pessoal)</option><option value="jurídica">PJ (jurídica)</option></select>`)}
     ${fld('Forma Pagamento',sel('m-forma',['PIX','TED','Boleto','Cartão']))}
     ${fld('Status',sel('m-status',['Pago','A Receber','Atrasado']))}
-    ${fld('Mês/Ano','<input id="m-mes" placeholder="01/03/2026">')}
   </div>
   <div id="pf-notice" style="display:none;margin:8px 0 4px;padding:11px 14px;background:#FEF3E2;border:1px solid #F0C070;border-radius:3px;font-size:11px;color:#7A5000;line-height:1.6">
     ⚠️ <strong>Entrada PF:</strong> uma saída <code>[TD] {nome do contrato}</code> será criada automaticamente como <em>retirada de lucros · Ambas</em>, para manter o espelho contábil.
@@ -150,7 +211,6 @@ function mSaida(d=null){
     ${fld('Conta',sel('m-conta',[{v:'pessoal',l:'PF (pessoal)'},{v:'jurídica',l:'PJ (jurídica)'}]))}
     ${fld('Sócia',sel('m-socia',[{v:'',l:'— Nenhuma —'},'Fernanda','Laís','Ambas']))}
     ${fld('Status',sel('m-status',['Pago','A Pagar']))}
-    ${fld('Mês/Ano','<input id="m-mes" placeholder="01/03/2026">')}
   </div>
   <div class="modal-actions">
     ${d?`<button class="btn-delete" onclick="deleteItem('saida',${d.id})">🗑 Apagar</button>`:''}
@@ -194,7 +254,6 @@ function mRetirada(d=null){
     ${fld('Data','<input id="m-data" type="date">')}
     ${fld('Conta',sel('m-conta',[{v:'pessoal',l:'PF (pessoal)'},{v:'jurídica',l:'PJ (jurídica)'}]))}
     ${fld('Status',sel('m-status',['Pago','A Pagar']))}
-    ${fld('Mês/Ano','<input id="m-mes" placeholder="01/03/2026">')}
   </div>
   <div class="modal-actions"><button class="btn-cancel" onclick="closeModal()">Cancelar</button><button class="btn-save" onclick="saveRetirada()">Salvar</button></div>`
 }
@@ -203,19 +262,40 @@ function mRetirada(d=null){
 // SAVES / UPDATES
 // ═══════════════════════════════════════════════
 async function saveProjeto(id){
+  const nome = g('m-nome'), cliente = g('m-cliente')
   const payload = {
-    numero:parseInt(g('m-num'))||null, nome_contrato:g('m-nome'), cliente:g('m-cliente'),
+    numero:parseInt(g('m-num'))||null, nome_contrato:nome, cliente,
     contato:g('m-contato'), tipologia:g('m-tipologia'), servico:g('m-servico'),
     valor_contrato:parseFloat(g('m-valor'))||0, parcelas:parseInt(g('m-parcelas'))||1,
-    a_receber:parseFloat(g('m-areceber'))||0, conta:g('m-conta'), status:g('m-status'),
+    conta:g('m-conta'), status:g('m-status'),
     data_inicio:g('m-inicio')||null, data_fim:g('m-fim')||null,
     cidade:g('m-cidade'), uf:g('m-uf'), origem:g('m-origem'), metros_quadrados:g('m-m2'), obs:g('m-obs')
   }
-  const {error} = id
-    ? await db.from('contratos').update(payload).eq('id',id)
-    : await db.from('contratos').insert(payload)
-  if(!error){closeModal();await loadData();renderProjetos()}
-  else toast(friendlyError(error), 'error', 6000)
+  // Coleta parcelas ANTES de fechar o modal (só em contrato novo)
+  const parcelas = id ? [] : coletarParcelas()
+
+  let novoContrato = null, error
+  if(id){
+    ({error} = await db.from('contratos').update(payload).eq('id',id))
+  } else {
+    const r = await db.from('contratos').insert(payload).select().single()
+    error = r.error; novoContrato = r.data
+  }
+  if(error){ toast(friendlyError(error), 'error', 6000); return }
+
+  // Gera as parcelas previstas como entradas "A Receber" do contrato recém-criado
+  if(novoContrato && parcelas.length){
+    const conta = g('m-conta')
+    const rows = parcelas.map(p=>({
+      contrato_id: novoContrato.id, nome_contrato: nome, cliente,
+      tipo_entrada: 'projeto', valor: p.valor, data_pagamento: p.data,
+      conta, status: 'A Receber', mes_ano: mesAnoDeData(p.data)
+    }))
+    const {error:eParc} = await db.from('entradas').insert(rows)
+    if(eParc){ toast('Contrato salvo, mas falhou ao gerar as parcelas: '+friendlyError(eParc), 'error', 7000) }
+  }
+
+  closeModal(); await loadData(); renderProjetos()
 }
 
 async function saveEntrada(id){
@@ -224,7 +304,7 @@ async function saveEntrada(id){
   const conta = g('m-conta')
   const valor = parseFloat(g('m-valor'))||0
   const data = g('m-data')||null
-  const mes = g('m-mes')
+  const mes = mesAnoDeData(data)
   const status = g('m-status')
   const isPF = conta==='pessoal' || conta==='PF'
 
@@ -263,7 +343,7 @@ async function saveSaida(id){
   const payload = {
     tipo_saida:g('m-tipo'), descricao:g('m-desc'), valor:parseFloat(g('m-valor'))||0,
     data_pagamento:g('m-data')||null, conta:g('m-conta'), socia:g('m-socia')||null,
-    status:g('m-status'), mes_ano:g('m-mes'),
+    status:g('m-status'), mes_ano:mesAnoDeData(g('m-data')),
     contrato_id: cid ? parseInt(cid) : null,
     nome_contrato: cnome || null
   }
@@ -310,7 +390,7 @@ async function saveRT(id){
   const ficouPago = (!id && status==='Pago') || (id && eraAReceber && status==='Pago')
 
   if(isPF && ficouPago && nomeContrato){
-    const mes = data ? `01/${String(new Date(data+'T12:00:00').getMonth()+1).padStart(2,'0')}/${new Date(data+'T12:00:00').getFullYear()}` : mesAtual()
+    const mes = mesAnoDeData(data)
     const descricaoTD = `[TD] ${nomeContrato}`
     const jaExiste = S.some(s=>s.descricao===descricaoTD && Math.abs((s.valor||0)-vr)<0.01 && s.data_pagamento===data)
     if(!jaExiste){
@@ -337,7 +417,7 @@ async function saveRetirada(){
   const {error} = await db.from('saidas').insert({
     tipo_saida:g('m-tipo'), descricao:`${g('m-tipo')} — ${g('m-socia')}`,
     valor:parseFloat(g('m-valor'))||0, data_pagamento:g('m-data')||null,
-    conta:g('m-conta'), socia:g('m-socia'), status:g('m-status'), mes_ano:g('m-mes')
+    conta:g('m-conta'), socia:g('m-socia'), status:g('m-status'), mes_ano:mesAnoDeData(g('m-data'))
   })
   if(!error){closeModal();await loadData();renderSocias()}
   else toast(friendlyError(error), 'error', 6000)

@@ -30,7 +30,7 @@ function renderProjetos(){
       <td style="color:var(--preto-soft);max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(p.cliente)}">${esc(p.cliente)}</td>
       <td>${badge(p.servico||'—')}</td>
       <td class="td-money">${fmt(p.valor_contrato)}</td>
-      <td class="td-money td-amber">${fmt(p.a_receber||0)}</td>
+      <td class="td-money td-amber">${fmt(contratoAReceber(p))}</td>
       <td>${contaBadge(p.conta)}</td>
       <td>${badge(p.status)}</td>
       <td class="td-muted">${esc(p.cidade||'')}${p.uf?'/'+esc(p.uf):''}</td>
@@ -129,7 +129,7 @@ function showProjetoDrawer(id){
     <div class="drawer-row"><span class="drawer-lbl">Serviço</span><span class="drawer-val">${esc(p.servico||'—')}</span></div>
     <div class="drawer-row"><span class="drawer-lbl">Valor do Contrato</span><span class="drawer-val">${fmt(p.valor_contrato)}</span></div>
     <div class="drawer-row"><span class="drawer-lbl">Parcelas</span><span class="drawer-val">${p.parcelas||1}x</span></div>
-    <div class="drawer-row"><span class="drawer-lbl">A Receber</span><span class="drawer-val" style="color:var(--amber)">${fmt(p.a_receber||0)}</span></div>
+    <div class="drawer-row"><span class="drawer-lbl">A Receber</span><span class="drawer-val" style="color:var(--amber)">${fmt(contratoAReceber(p))}</span></div>
     <div class="drawer-row"><span class="drawer-lbl">Conta</span><span class="drawer-val">${contaBadge(p.conta)}</span></div>
     <div class="drawer-row"><span class="drawer-lbl">Status</span><span class="drawer-val">${badge(p.status)}</span></div>
     <div class="drawer-row"><span class="drawer-lbl">Início</span><span class="drawer-val">${fmtD(p.data_inicio)}</span></div>

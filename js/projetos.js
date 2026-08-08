@@ -53,16 +53,18 @@ function renderResultado(){
 
   // Por projeto: entradas + RT recebidas - saídas diretas - rateio geral
   const resultado = P.map(p => {
-    // Receita REALIZADA: só entradas pagas (parcela futura não é resultado);
-    // vínculo por id com precedência, nome só quando não há id e não é vazio
-    const entradas = E.filter(e=>
-      (e.contrato_id != null ? e.contrato_id===p.id : (!!e.nome_contrato && e.nome_contrato===p.nome_contrato))
-      && e.status==='Pago').reduce((a,e)=>a+(e.valor||0),0)
-    // contratos.projeto existe no banco (legado) — casa por ele também, mas
-    // só quando preenchido, senão null===null atribuiria RT ao projeto errado
+    // Receita REALIZADA: só entradas pagas (parcela futura não é resultado)
+    const entradas = E.filter(e=>doContrato(e,p) && e.status==='Pago').reduce((a,e)=>a+(e.valor||0),0)
+    // RT casa por texto (o app grava rt_comissoes.projeto, nunca contrato_id).
+    // Guardas de truthy impedem null===null de atribuir RT ao projeto errado.
     const rtRecebida = R.filter(r=>!!r.projeto && r.status==='Pago'
       && (r.projeto===p.nome_contrato || (!!p.projeto && r.projeto===p.projeto))
     ).reduce((a,r)=>a+(r.valor_rt||0),0)
+    // Saída direta = vinculada por contrato_id, e SÓ por ele — de propósito.
+    // Usar `projeto` aqui reclassificaria centenas de saídas legadas de
+    // "geral rateada" para "direta", mudando o rateio e o resultado de todos
+    // os projetos de uma vez. É uma decisão de negócio para tomar com as
+    // sócias, não um efeito colateral de correção de bug.
     const saidasDiretas = S.filter(s=>s.contrato_id===p.id && tiposOperacionais.includes(s.tipo_saida) && s.status==='Pago').reduce((a,s)=>a+(s.valor||0),0)
     const rateio = p.status==='Ativo' ? rateioUnitario : 0
     const receita = entradas + rtRecebida

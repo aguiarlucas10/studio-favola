@@ -130,19 +130,33 @@ function calcFluxoMesAtual(){
   return {entradas, saidas}
 }
 
+// Um lançamento (entrada/saída) pertence a este contrato?
+//
+// contrato_id é o vínculo canônico e tem precedência. Sem ele, casa por texto
+// usando nome_contrato OU a coluna legada `projeto` — que está preenchida em
+// ~99% do histórico (236/238 entradas, 370/389 saídas em ago/2026) e nunca é
+// gravada pelo app atual. Ignorar `projeto` perderia o vínculo de quase todo
+// o histórico; por isso as duas colunas contam dos dois lados.
+//
+// As guardas de truthy são essenciais: sem elas, null===null e ''==='' fariam
+// lançamentos avulsos serem atribuídos a contratos ao acaso.
+function doContrato(reg, p){
+  if(!reg || !p) return false
+  if(reg.contrato_id != null) return reg.contrato_id === p.id
+  const nomes = [p.nome_contrato, p.projeto].filter(Boolean)
+  if(!nomes.length) return false
+  return nomes.includes(reg.nome_contrato) || nomes.includes(reg.projeto)
+}
+
 // "A receber" de um contrato = soma das parcelas (entradas) pendentes daquele contrato.
 // Fonte única da verdade: em vez do campo a_receber digitado à mão, soma as entradas
 // não pagas vinculadas ao contrato. Exclui RT (contabilizada em rt_comissoes).
 // A coluna contratos.a_receber é LEGADA: os saldos antigos viraram entradas
-// '[Backfill saldo legado]' via docs/migracao-2026-08.sql (Seção 4).
-// Vínculo: contrato_id tem precedência; nome só vale quando a entrada não tem id
-// e o nome não é vazio (senão ''==='' e null===null casariam entradas avulsas).
+// '[Backfill saldo legado]' via docs/migracao-2026-08/04-backfill-a-receber.sql.
 function contratoAReceber(p){
   if(!p) return 0
   return E.filter(e =>
-      (e.contrato_id != null
-        ? e.contrato_id === p.id
-        : (!!e.nome_contrato && e.nome_contrato === p.nome_contrato))
+      doContrato(e, p)
       && e.status!=='Pago'
       && (e.tipo_entrada||'').toLowerCase()!=='rt')
     .reduce((a,e)=>a+(e.valor||0),0)

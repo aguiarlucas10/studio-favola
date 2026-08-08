@@ -77,10 +77,12 @@ create table if not exists entradas (
   forma_pagto    text,          -- PIX | TED | Boleto | Cartão | Ajuste
   status         text default 'Pendente',  -- o app grava Pago | A Receber | Atrasado
   obs            text,
-  -- ⚠️ GENERATED ALWAYS: coluna calculada pelo banco. Qualquer INSERT/UPDATE
-  -- que a inclua no payload é REJEITADO — por isso js/bulk.js a omite ao
-  -- duplicar. Ver a fórmula com a consulta 0.10 do diagnóstico.
-  is_retirada_automatica boolean generated always as (null::boolean) stored,
+  -- ⚠️ GENERATED ALWAYS: calculada pelo banco como (conta = 'pessoal'), ou
+  -- seja, só um atalho para "entrada caiu na conta PF". Não cria espelho nem
+  -- tem efeito colateral — o espelho [TD] é responsabilidade do app.
+  -- Qualquer INSERT/UPDATE que a inclua no payload é REJEITADO pelo Postgres;
+  -- por isso js/bulk.js a omite ao duplicar (era a causa do bug do Duplicar).
+  is_retirada_automatica boolean generated always as (conta = 'pessoal') stored,
   created_at     timestamptz default now(),
   updated_at     timestamptz default now()
 );
@@ -180,6 +182,35 @@ create table if not exists ajustes_caixa (
 --
 -- NÃO HÁ constraints CHECK nos campos de status/tipo — os valores válidos
 -- são convenção do app, não regra do banco.
+-- ═══════════════════════════════════════════════════════════════
+
+-- ═══════════════════════════════════════════════════════════════
+-- TRIGGERS (pg_trigger, 08/08/2026)
+--
+-- O ÚNICO trigger de negócio no banco é o de ajustes_caixa (substituído
+-- pelo passo 03 da migração). contratos/entradas/saidas/rt_comissoes não
+-- têm trigger algum — toda a lógica (espelhos [TD], divisão 50/50,
+-- geração de parcelas) roda no cliente.
+--
+-- Consequência: `updated_at` tem default now() mas NUNCA é atualizado
+-- (não há trigger e o app não grava a coluna) — é sempre igual a
+-- created_at. Não usar como "última modificação".
+-- ═══════════════════════════════════════════════════════════════
+
+-- ═══════════════════════════════════════════════════════════════
+-- A COLUNA LEGADA `projeto` (contratos, entradas, saidas, rt_comissoes)
+--
+-- Preenchida em quase todo o histórico (ago/2026: contratos 41/42,
+-- entradas 236/238, saidas 370/389, rt_comissoes 48/48), mas o app só a
+-- grava em rt_comissoes — registros novos das demais tabelas nascem com
+-- `projeto` nulo, enquanto `nome_contrato` é sempre preenchida.
+--
+-- Por isso o vínculo lançamento↔contrato (doContrato em js/data.js) casa
+-- pelas DUAS colunas quando não há contrato_id. Exceção deliberada:
+-- "saídas diretas" no Resultado p/ Projeto continuam exigindo
+-- contrato_id — passar a usar `projeto` reclassificaria centenas de
+-- saídas de "geral rateada" para "direta" e mudaria o resultado de todos
+-- os projetos. Decidir com as sócias antes de mexer.
 -- ═══════════════════════════════════════════════════════════════
 
 -- ═══════════════════════════════════════════════════════════════

@@ -8,7 +8,7 @@ colar o conteúdo do arquivo → Run).
 | Ordem | Arquivo | O que faz | Atenção |
 |---|---|---|---|
 | 1º | `00-diagnostico.sql` | Só leitura (SELECTs) | **Rode cada consulta separadamente** (selecione o bloco e Run) — rodando tudo junto só o último resultado aparece. Guarde/print os resultados. |
-| 2º | `01-ajustes-caixa-colunas.sql` | Colunas de identidade em `ajustes_caixa` | Seguro; idempotente. |
+| 2º | `01-ajustes-caixa-colunas.sql` | Colunas de identidade em `ajustes_caixa` | Já aplicado em produção (o diagnóstico 0.11 mostrou o trigger antigo ativo). Rodar de novo não faz mal — é idempotente. |
 | 3º | `02-allowlist-rls.sql` | Só quem está em `usuarios` acessa os dados | **Antes**: confira no resultado do diagnóstico (consulta 0.9) que as DUAS sócias aparecem em `usuarios` — senão vocês mesmas perdem acesso. |
 | 4º | `03-trigger-dupla-aprovacao.sql` | Blindagem da dupla aprovação no banco | Seguro; substitui o trigger antigo. |
 | 5º | `04-backfill-a-receber.sql` | Cria as parcelas do saldo legado | **Só depois** de conferir com a Fer a lista da consulta 0.5 do diagnóstico. Reversível (instrução no arquivo). |
@@ -24,9 +24,10 @@ Não precisa reportar tudo — a maioria é conferência local antes de seguir.
 | 0.1 / 0.2 / 0.3 / 0.4 | Só olhar (os passos 01–03 corrigem o que for preciso de qualquer forma). |
 | **0.5** | **Conferir com a Fer**: são os contratos que voltarão a ter "A Receber". Algum já está quitado? Zere o `a_receber` dele antes do passo 04. |
 | 0.6 / 0.6b | Só olhar: os formatos devem ser `DD/MM/YYYY`, `MM/YYYY`, `YYYY-MM` ou `YYYY/MM`. Se aparecer algum diferente, me avise. |
-| **0.7 e 0.7b** | **Colar para mim** — é o que resolve o bug do "Duplicar entrada". |
-| 0.8 | Basta me dizer se voltou vazia (então pule o passo 04b) ou quantas linhas vieram. |
+| ~~0.7 / 0.7b~~ | ✅ Feito em 08/08/2026 — revelou a coluna gerada `is_retirada_automatica` (causa do bug do "Duplicar") e o UNIQUE em `contratos.numero`. `schema.sql` foi reescrito com o schema real. |
+| ~~0.8~~ | ✅ Voltou vazia — **pule o passo 04b**. |
 | **0.9** | **Conferir você**: as duas sócias aparecem? Se sim, pode rodar o passo 02. Se faltar alguma, me avise antes. |
+| ~~0.10 / 0.11 / 0.12~~ | ✅ Feito — a coluna gerada é só `conta = 'pessoal'` (inofensiva); único trigger de negócio é o de `ajustes_caixa`; a coluna legada `projeto` está preenchida em ~99% do histórico e agora entra no vínculo lançamento↔contrato. |
 
 ## Fora do SQL (painel do Supabase)
 

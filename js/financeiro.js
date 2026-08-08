@@ -8,6 +8,8 @@ let finEspelhosVisiveis = false  // bloco de espelhos [TD] recolhido por padrão
 
 // Espelho automático = saída [TD] gerada quando um pagamento cai na conta PF.
 // Reconhece também os legados sem colchetes: "TD Contrato X", "TD RT X".
+// Usada só para EXIBIR (mover para o bloco recolhível de espelhos); as
+// automações que alteram/apagam usam encontraEspelhos(), bem mais restrita.
 const isEspelho = s => /^(\[TD\]|TD\s)/i.test((s.descricao||'').trim())
 const isPago = r => r.status==='Pago'
 

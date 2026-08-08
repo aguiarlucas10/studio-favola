@@ -8,8 +8,16 @@ let currentUserId = null, currentUserName = ''
 async function initApp(){
   document.getElementById('login-screen').style.display='none'
   document.getElementById('app').style.display='block'
-  const {data:{user}} = await db.auth.getUser()
-  if(!user){ location.reload(); return }  // token revogado entre o check e aqui
+  // getSession() (checkSession) lê do localStorage sem rede; getUser() vai à
+  // rede. Recarregar quando getUser falha por conexão entraria em loop infinito
+  // de reload — por isso a falha vira aviso e volta ao login, sem recarregar.
+  const {data:{user}, error:errUser} = await db.auth.getUser()
+  if(errUser || !user){
+    toast('Não foi possível confirmar seu login. Verifique a conexão e recarregue a página.', 'error', 9000)
+    document.getElementById('app').style.display='none'
+    document.getElementById('login-screen').style.display='flex'
+    return
+  }
   const {data:u} = await db.from('usuarios').select('nome').eq('id',user.id).single()
   currentUserId = user.id
   currentUserName = u?.nome||user.email.split('@')[0]
@@ -26,31 +34,44 @@ async function initApp(){
 // ordenação é por data desc, as parcelas futuras vinham primeiro e empurravam
 // o histórico antigo para fora da janela — o saldo acumulado ficava errado.
 // Ordena também por id para paginação estável em datas empatadas/nulas.
+// Avança pelo número de linhas REALMENTE recebidas e só para quando a página
+// vem vazia. Parar em "recebeu menos de 1000" quebraria silenciosamente se o
+// projeto tivesse db-max-rows menor que isso — voltaríamos ao bug do histórico
+// truncado, agora sem nenhum .limit() visível para dar a pista.
 async function fetchAll(tabela, orderCol){
   const out = []
-  for(let de=0;;de+=1000){
+  let de = 0
+  for(;;){
     const {data, error} = await db.from(tabela).select('*')
       .order(orderCol,{ascending:false}).order('id',{ascending:false})
       .range(de, de+999)
     if(error) return {data:out, error}
-    out.push(...(data||[]))
-    if(!data || data.length < 1000) return {data:out, error:null}
+    const n = data?.length || 0
+    if(!n) return {data:out, error:null}
+    out.push(...data)
+    de += n
   }
 }
 
 async function loadData(){
   const [p,e,s,r,c] = await Promise.all([
-    db.from('contratos').select('*').order('id',{ascending:false}),
+    fetchAll('contratos','id'),
     fetchAll('entradas','data_pagamento'),
     fetchAll('saidas','data_pagamento'),
-    db.from('rt_comissoes').select('*').order('data_fechamento',{ascending:false}),
+    fetchAll('rt_comissoes','data_fechamento'),
     db.from('contas_bancarias').select('*').order('nome',{ascending:true}),
   ])
-  // Falha em qualquer consulta precisa ser VISÍVEL: renderizar os números
-  // sobre um array vazio faria o caixa parecer zerado e induziria a erro.
+  // Uma consulta que falha no meio da paginação devolve dados PARCIAIS. Exibir
+  // números sobre metade do histórico é pior que exibir nada: um caixa zerado
+  // é obviamente suspeito, um caixa 40% menor parece correto. Por isso a
+  // atribuição é por consulta — quem falhou mantém o que já estava carregado.
   const falha = [p,e,s,r,c].find(x=>x.error)
-  if(falha) toast(friendlyError(falha.error), 'error', 8000)
-  P=p.data||[]; E=e.data||[]; S=s.data||[]; R=r.data||[]; C=c.data||[]
+  if(falha) toast(friendlyError(falha.error)+' Os números podem estar incompletos — recarregue a página.', 'error', 10000)
+  if(!p.error) P=p.data||[]
+  if(!e.error) E=e.data||[]
+  if(!s.error) S=s.data||[]
+  if(!r.error) R=r.data||[]
+  if(!c.error) C=c.data||[]
   normalizaArrays()
 }
 
@@ -104,10 +125,30 @@ function normalizaMesAno(v){
   return s
 }
 
-// Garante que todos os registros em memória tenham mes_ano normalizado
+// Garante que todos os registros em memória tenham mes_ano normalizado (MM/YYYY),
+// guardando o valor ORIGINAL do banco em _mesAnoBanco — é ele que deve ser
+// regravado quando um registro sem data_pagamento é editado, senão o lançamento
+// pularia para o mês corrente. Não-enumerável de propósito: assim não vaza em
+// spread/Object.entries (ex.: no payload de duplicação).
+function guardaOriginal(r){
+  Object.defineProperty(r, '_mesAnoBanco', {value: r.mes_ano, enumerable: false, configurable: true, writable: true})
+  r.mes_ano = normalizaMesAno(r.mes_ano)
+}
 function normalizaArrays(){
-  E.forEach(e=>{ e.mes_ano=normalizaMesAno(e.mes_ano) })
-  S.forEach(s=>{ s.mes_ano=normalizaMesAno(s.mes_ano) })
+  E.forEach(guardaOriginal)
+  S.forEach(guardaOriginal)
+}
+
+// mes_ano a gravar no banco ao salvar um lançamento.
+// Com data de pagamento, deriva dela. SEM data (registros legados e importados
+// costumam ter data nula), PRESERVA o mês original — recalcular jogaria um
+// lançamento de 2023 no mês corrente só porque alguém corrigiu a descrição.
+// Só cai no mês atual quando é registro novo mesmo.
+function mesAnoAoSalvar(data, anterior){
+  if(data) return mesAnoDeData(data)
+  if(anterior && anterior._mesAnoBanco) return anterior._mesAnoBanco
+  if(anterior && anterior.mes_ano) return anterior.mes_ano
+  return mesAnoDeData(null)
 }
 
 function calcFluxoMeses(nMeses=6){

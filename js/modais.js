@@ -338,16 +338,30 @@ async function saveProjeto(id){
 // ═══════════════════════════════════════════════
 // ESPELHOS [TD] — contrapeso contábil de pagamento na conta PF
 // ═══════════════════════════════════════════════
-// Localiza as saídas-espelho de uma entrada PF. Casa por CONTEÚDO (nome do
-// contrato no vínculo ou na descrição + valor aproximado + mesma data), não
-// por descrição exata — reconhece os legados "TD Contrato X" sem colchetes
-// e evita criar espelho duplicado ao lado de um legado.
+// Localiza as saídas-espelho de uma entrada PF.
+//
+// Esta função alimenta automações que ALTERAM e APAGAM saídas, então é
+// deliberadamente mais restrita que isEspelho() (usado só para exibir):
+//  - exige tipo_saida 'retirada de lucros' — todo espelho é uma retirada, e
+//    isso exclui uma despesa real cuja descrição por acaso comece com "TD "
+//    (ex.: "TD Cortinas", fornecedor), que de outra forma poderia ser apagada
+//    junto com a entrada;
+//  - exige nome de contrato e data preenchidos: sem eles, valores nulos
+//    casariam qualquer espelho órfão (null===null, aprox(null,null));
+//  - casa nome inteiro no vínculo, ou a descrição no formato conhecido do
+//    espelho — nunca substring solta, que confundiria "Casa Ana" com
+//    "Casa Ana II" na mesma data e valor.
 function encontraEspelhos(e){
-  const nome = e.nome_contrato || ''
+  const nome = e?.nome_contrato || ''
+  if(!nome || !e.data_pagamento) return []
+  const alvo = nome.trim().toLowerCase()
+  const casaDescricao = s => {
+    const d = (s.descricao||'').trim().toLowerCase()
+    return d === `[td] ${alvo}` || d === `td ${alvo}` || d === `td contrato ${alvo}` || d === `td rt ${alvo}`
+  }
   return S.filter(s => isEspelho(s)
-    && (nome
-      ? ((s.nome_contrato && s.nome_contrato===nome) || (s.descricao||'').includes(nome))
-      : !s.nome_contrato)
+    && s.tipo_saida === 'retirada de lucros'
+    && ((s.nome_contrato && s.nome_contrato.trim().toLowerCase()===alvo) || casaDescricao(s))
     && aprox(s.valor, e.valor)
     && s.data_pagamento === e.data_pagamento)
 }
@@ -383,11 +397,12 @@ async function saveEntrada(id){
   const conta = g('m-conta')
   const valor = parseFloat(g('m-valor'))||0
   const data = g('m-data')||null
-  const mes = mesAnoDeData(data)
   const status = g('m-status')
   const isPF = conta==='pessoal' || conta==='PF'
-  // Estado anterior ANTES de gravar, para detectar a quitação
+  // Estado anterior ANTES de gravar: detecta a quitação e preserva o mês
+  // original quando o registro não tem data de pagamento
   const anterior = id ? E.find(x=>x.id===id) : null
+  const mes = mesAnoAoSalvar(data, anterior)
 
   const payload = {
     contrato_id:proj?.id||null, nome_contrato:nomeContrato, cliente:proj?.cliente||'',
@@ -429,10 +444,11 @@ async function saveEntrada(id){
 async function saveSaida(id){
   const vinculo = g('m-vinculo') || ''
   const [cid, cnome] = vinculo ? vinculo.split('|') : [null, null]
+  const anterior = id ? S.find(x=>x.id===id) : null
   const payload = {
     tipo_saida:g('m-tipo'), descricao:g('m-desc'), valor:parseFloat(g('m-valor'))||0,
     data_pagamento:g('m-data')||null, conta:g('m-conta'), socia:g('m-socia')||null,
-    status:g('m-status'), mes_ano:mesAnoDeData(g('m-data')),
+    status:g('m-status'), mes_ano:mesAnoAoSalvar(g('m-data')||null, anterior),
     contrato_id: cid ? parseInt(cid) : null,
     nome_contrato: cnome || null
   }

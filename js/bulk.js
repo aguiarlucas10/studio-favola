@@ -87,7 +87,12 @@ async function bulkDuplicate(){
   const omitPorTabela = { entradas:['is_retirada_automatica'], contratos:['numero'] }
   const strip = (obj, tbl) => {
     const omit = [...omitComum, ...(omitPorTabela[tbl]||[])]
-    return Object.fromEntries(Object.entries(obj).filter(([k])=>!omit.includes(k)))
+    // `_`-prefixados são campos internos do app (ex: _mesAnoBanco), não colunas
+    const out = Object.fromEntries(Object.entries(obj).filter(([k])=>!omit.includes(k) && !k.startsWith('_')))
+    // mes_ano em memória está normalizado (MM/YYYY); o banco usa o legado
+    // 01/MM/YYYY. Copiar o valor da memória gravaria o formato errado.
+    if('mes_ano' in out) out.mes_ano = mesAnoAoSalvar(obj.data_pagamento, obj)
+    return out
   }
 
   let total = 0

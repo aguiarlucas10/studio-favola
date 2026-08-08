@@ -85,3 +85,29 @@ where mes_ano is not null
 select u.id, u.nome, au.email
 from usuarios u
 left join auth.users au on au.id = u.id;
+
+-- 0.10 ⭐ Fórmula da coluna gerada entradas.is_retirada_automatica.
+--      Ela era a causa do "Duplicar" falhar; precisamos saber se contém
+--      lógica de espelho [TD] que o app desconhece. REPORTE O RESULTADO.
+select a.attname as coluna, pg_get_expr(d.adbin, d.adrelid) as expressao
+from pg_attribute a
+join pg_attrdef d on d.adrelid = a.attrelid and d.adnum = a.attnum
+where a.attrelid = 'public.entradas'::regclass
+  and a.attgenerated <> '';
+
+-- 0.11 Triggers em TODAS as tabelas (não só ajustes_caixa) — regras de
+--      negócio no banco que o app pode estar duplicando ou ignorando.
+--      REPORTE se aparecer algo além dos de ajustes_caixa.
+select tgrelid::regclass as tabela, tgname, pg_get_triggerdef(oid)
+from pg_trigger
+where tgrelid in ('public.contratos'::regclass,'public.entradas'::regclass,
+                  'public.saidas'::regclass,'public.rt_comissoes'::regclass,
+                  'public.ajustes_caixa'::regclass)
+  and not tgisinternal;
+
+-- 0.12 As colunas legadas `projeto` (existem em 4 tabelas) ainda têm dados?
+--      Se vierem zeros, o app pode parar de considerá-las no futuro.
+select 'contratos' as tabela, count(*) filter (where projeto is not null and projeto <> '') as com_projeto, count(*) as total from contratos
+union all select 'entradas',     count(*) filter (where projeto is not null and projeto <> ''), count(*) from entradas
+union all select 'saidas',       count(*) filter (where projeto is not null and projeto <> ''), count(*) from saidas
+union all select 'rt_comissoes', count(*) filter (where projeto is not null and projeto <> ''), count(*) from rt_comissoes;

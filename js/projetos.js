@@ -58,7 +58,11 @@ function renderResultado(){
     const entradas = E.filter(e=>
       (e.contrato_id != null ? e.contrato_id===p.id : (!!e.nome_contrato && e.nome_contrato===p.nome_contrato))
       && e.status==='Pago').reduce((a,e)=>a+(e.valor||0),0)
-    const rtRecebida = R.filter(r=>!!r.projeto&&r.projeto===p.nome_contrato&&r.status==='Pago').reduce((a,r)=>a+(r.valor_rt||0),0)
+    // contratos.projeto existe no banco (legado) — casa por ele também, mas
+    // só quando preenchido, senão null===null atribuiria RT ao projeto errado
+    const rtRecebida = R.filter(r=>!!r.projeto && r.status==='Pago'
+      && (r.projeto===p.nome_contrato || (!!p.projeto && r.projeto===p.projeto))
+    ).reduce((a,r)=>a+(r.valor_rt||0),0)
     const saidasDiretas = S.filter(s=>s.contrato_id===p.id && tiposOperacionais.includes(s.tipo_saida) && s.status==='Pago').reduce((a,s)=>a+(s.valor||0),0)
     const rateio = p.status==='Ativo' ? rateioUnitario : 0
     const receita = entradas + rtRecebida

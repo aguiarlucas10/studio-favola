@@ -15,10 +15,14 @@ function filterRT(f,btn){
 // contrato e valor. A maioria das comissões (PJ, ou pagas antes dessa automação) não
 // tem entrada separada — a própria RT paga já é o registro do recebimento. Por isso
 // marcamos SÓ o caso positivo (✓ no caixa) e deixamos o resto em branco, sem alarmar.
+// entradas.projeto e rt_comissoes.projeto existem no banco e podem estar
+// preenchidas em registros legados — por isso as duas comparações. As guardas
+// de truthy são essenciais: sem elas, null===null casaria RTs com entradas
+// aleatórias e marcaria "✓ no caixa" falso.
 function rtEntradaNoCaixa(r){
   if(r.status!=='Pago' || !r.projeto) return null
   return E.find(e => (e.tipo_entrada||'').toLowerCase()==='rt'
-    && e.nome_contrato===r.projeto
+    && ((!!e.nome_contrato && e.nome_contrato===r.projeto) || (!!e.projeto && e.projeto===r.projeto))
     && aprox(e.valor, r.valor_rt))
 }
 

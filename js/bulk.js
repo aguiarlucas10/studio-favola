@@ -77,16 +77,25 @@ async function bulkDuplicate(){
   if(!sel.length) return
   const tables = [...new Set(sel.map(s=>s.table))]
 
-  // Campos que NÃO devem ser copiados (gerados pelo banco)
-  const omit = ['id','created_at']
-  const strip = obj => Object.fromEntries(Object.entries(obj).filter(([k])=>!omit.includes(k)))
+  // Campos que NÃO podem ser copiados numa duplicação:
+  // - id e timestamps: gerados pelo banco
+  // - entradas.is_retirada_automatica: coluna GENERATED ALWAYS — o Postgres
+  //   rejeita o INSERT inteiro se ela vier no payload (era a causa do
+  //   "Duplicar" falhar em entradas)
+  // - contratos.numero: UNIQUE — a cópia colidiria com o original
+  const omitComum = ['id','created_at','updated_at']
+  const omitPorTabela = { entradas:['is_retirada_automatica'], contratos:['numero'] }
+  const strip = (obj, tbl) => {
+    const omit = [...omitComum, ...(omitPorTabela[tbl]||[])]
+    return Object.fromEntries(Object.entries(obj).filter(([k])=>!omit.includes(k)))
+  }
 
   let total = 0
   for(const tbl of tables){
     const ids = sel.filter(s=>s.table===tbl).map(s=>s.id)
     // Busca os registros originais localmente (já carregados)
     const fonte = { contratos:P, entradas:E, saidas:S, rt_comissoes:R }[tbl] || []
-    const registros = ids.map(id=>fonte.find(r=>r.id===id)).filter(Boolean).map(strip)
+    const registros = ids.map(id=>fonte.find(r=>r.id===id)).filter(Boolean).map(r=>strip(r,tbl))
     if(!registros.length) continue
     const {error} = await db.from(tbl).insert(registros)
     if(error){
@@ -101,5 +110,6 @@ async function bulkDuplicate(){
   await loadData()
   tables.forEach(tbl=>reRender[tbl]?.())
 
-  toast(`⧉ ${total} registro${total>1?'s':''} duplicado${total>1?'s':''}`, 'info', 3500)
+  const aviso = tables.includes('contratos') ? ' · preencha o nº do novo contrato' : ''
+  toast(`⧉ ${total} registro${total>1?'s':''} duplicado${total>1?'s':''}${aviso}`, 'info', 4500)
 }

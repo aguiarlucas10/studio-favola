@@ -12,7 +12,7 @@ colar o conteúdo do arquivo → Run).
 | 3º | `02-allowlist-rls.sql` | Só quem está em `usuarios` acessa os dados | **Antes**: confira no resultado do diagnóstico (consulta 0.9) que as DUAS sócias aparecem em `usuarios` — senão vocês mesmas perdem acesso. |
 | 4º | `03-trigger-dupla-aprovacao.sql` | Blindagem da dupla aprovação no banco | Seguro; substitui o trigger antigo. |
 | 5º | `04-backfill-a-receber.sql` | Cria as parcelas do saldo legado | **Só depois** de conferir com a Fer a lista da consulta 0.5 do diagnóstico. Reversível (instrução no arquivo). |
-| 6º | `04b-corrige-mes-ano-csv.sql` | Conserta `mes_ano` inválido de CSVs antigos | Confira antes o preview da consulta 0.8. Se 0.8 voltou vazio, pule este arquivo. |
+| 6º | ~~`04b-corrige-mes-ano-csv.sql`~~ | Conserta `mes_ano` inválido de CSVs antigos | **PULAR** — a consulta 0.8 voltou vazia em 08/08/2026: não há `mes_ano` inválido no banco. |
 | 7º | `05-rpc-aprovar-ajuste.sql` | Aprovação atômica de ajuste | **Obrigatório**: sem ele, aprovar ajuste de caixa no app falha. |
 
 ## O que fazer com cada resultado do diagnóstico

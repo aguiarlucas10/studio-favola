@@ -89,7 +89,11 @@ async function bulkDuplicate(){
     const registros = ids.map(id=>fonte.find(r=>r.id===id)).filter(Boolean).map(strip)
     if(!registros.length) continue
     const {error} = await db.from(tbl).insert(registros)
-    if(error){ toast(friendlyError(error), 'error', 6000); return }
+    if(error){
+      console.error(`[Duplicar ${tbl}] payload que falhou:`, registros)
+      toast(friendlyError(error), 'error', 8000)
+      return
+    }
     total += registros.length
   }
 

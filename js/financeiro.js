@@ -154,10 +154,10 @@ function renderFinanceiro(){
   const Ef = mesSelecionado ? E.filter(e=>e.mes_ano===mesSelecionado) : E
   const Sf = mesSelecionado ? S.filter(s=>s.mes_ano===mesSelecionado) : S
 
-  // ENTRADAS — Recebido (realizado) e A receber (previsto)
+  // ENTRADAS — A receber (previsto) primeiro, Recebido (realizado) depois
   const recebido  = Ef.filter(isPago)
   const aReceber  = Ef.filter(e=>!isPago(e))
-  const entradasHTML = (tabelaRecebido(recebido) + tabelaAReceber(aReceber))
+  const entradasHTML = (tabelaAReceber(aReceber) + tabelaRecebido(recebido))
     || '<div class="empty">Nenhuma entrada</div>'
   document.getElementById('fin-entradas-wrap').innerHTML = entradasHTML
 
@@ -166,7 +166,7 @@ function renderFinanceiro(){
   const espelhos    = Sf.filter(isEspelho)
   const pagas    = saidasReais.filter(isPago)
   const aPagar   = saidasReais.filter(s=>!isPago(s))
-  let saidasHTML = (tabelaSaidas('Pago', pagas, 'var(--red)') + tabelaSaidas('A pagar', aPagar, 'var(--amber)'))
+  let saidasHTML = (tabelaSaidas('A pagar', aPagar, 'var(--amber)') + tabelaSaidas('Pago', pagas, 'var(--red)'))
     || '<div class="empty">Nenhuma saída</div>'
   if(espelhos.length){
     const totalEsp = espelhos.reduce((a,s)=>a+(s.valor||0),0)

@@ -49,6 +49,8 @@ function toast(msg, type='info', ms=4500){
 // Traduz erros crus do Supabase/Postgres para mensagens que a sócia entende
 function friendlyError(error){
   const raw = error?.message || String(error||'')
+  // Sempre registra o erro cru — o toast resume, o console diagnostica
+  console.error('[Supabase]', error?.code||'', raw, error?.details||'', error?.hint||'')
   const map = [
     [/row-level security/i, 'Você não tem permissão para fazer isso. Confirme que está logada com a conta certa.'],
     [/jwt|session|not authenticated/i, 'Sua sessão expirou. Atualize a página e faça login novamente.'],
@@ -58,5 +60,6 @@ function friendlyError(error){
     [/null value in column/i, 'Faltou preencher um campo obrigatório.'],
   ]
   for(const [re,msg] of map) if(re.test(raw)) return msg
-  return 'Não foi possível concluir a ação. Tente novamente em instantes.'
+  // Erro desconhecido: mostrar o motivo resumido em vez de esconder
+  return raw ? `Não foi possível concluir: ${raw.slice(0,160)}` : 'Não foi possível concluir a ação. Tente novamente em instantes.'
 }

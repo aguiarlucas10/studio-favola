@@ -83,6 +83,21 @@ function toggleRTNotice(){
   const notice = document.getElementById('rt-pf-notice')
   if(notice) notice.style.display = ((conta==='pessoal'||conta==='PF') && status==='Pago') ? 'block' : 'none'
 }
+// Valor RT = venda × % — preenchido automaticamente, mas editável
+// (só recalcula quando venda/% mudam; não sobrescreve edição manual à toa)
+function rtRecalc(){
+  const venda = parseFloat(g('m-venda'))||0
+  const pct = parseFloat(g('m-pct'))||0
+  const el = document.getElementById('m-valor')
+  if(el && venda && pct) el.value = Math.round(venda*pct*100)/100
+  rtRecalcAReceber()
+}
+// A Receber acompanha o status: Pago → 0; senão → Valor RT atual.
+// Continua editável para registrar recebimento parcial.
+function rtRecalcAReceber(){
+  const el = document.getElementById('m-areceber')
+  if(el) el.value = g('m-status')==='Pago' ? 0 : (parseFloat(g('m-valor'))||0)
+}
 
 function mProjeto(d=null){
   const genOnChange = d ? '' : ' onchange="gerarParcelasPreview()"'
@@ -235,13 +250,13 @@ function mRT(d=null){
     ${fld('Categoria',sel('m-cat',['Marcenaria','Móveis soltos','Pedras','Cortinas e persianas','Eletros','Iluminação','Tapetes','Obra','Decoração','Enxoval','Tecidos','Vinílico','Serralheria']))}
     ${fld('Fornecedor','<input id="m-forn">')}
     ${fld('Contato','<input id="m-contato">')}
-    ${fld('Valor da Venda (R$)','<input id="m-venda" type="number" step="0.01">')}
-    ${fld('% RT (ex: 0.10)','<input id="m-pct" type="number" step="0.01" value="0.10">')}
-    ${fld('Valor RT (R$)','<input id="m-valor" type="number" step="0.01">')}
+    ${fld('Valor da Venda (R$)','<input id="m-venda" type="number" step="0.01" oninput="rtRecalc()">')}
+    ${fld('% RT (ex: 0.10)','<input id="m-pct" type="number" step="0.01" value="0.10" oninput="rtRecalc()">')}
+    ${fld('Valor RT (R$)','<input id="m-valor" type="number" step="0.01" oninput="rtRecalcAReceber()">')}
     ${fld('A Receber (R$)','<input id="m-areceber" type="number" step="0.01">')}
     ${fld('Data Fechamento','<input id="m-data" type="date">')}
     ${fld('Conta',`<select id="m-conta" onchange="toggleRTNotice()"><option value="pessoal">PF (pessoal)</option><option value="jurídica">PJ (jurídica)</option></select>`)}
-    ${fld('Status',`<select id="m-status" onchange="toggleRTNotice()"><option value="A receber">A receber</option><option value="Pago">Pago</option><option value="Inadimplência">Inadimplência</option></select>`)}
+    ${fld('Status',`<select id="m-status" onchange="toggleRTNotice();rtRecalcAReceber()"><option value="A receber">A receber</option><option value="Pago">Pago</option><option value="Inadimplência">Inadimplência</option></select>`)}
   </div>
   <div id="rt-pf-notice" style="display:none;margin:8px 0 4px;padding:11px 14px;background:#FEF3E2;border:1px solid #F0C070;border-radius:3px;font-size:11px;color:#7A5000;line-height:1.6">
     ⚠️ <strong>RT PF + Pago:</strong> uma entrada e uma saída <code>[TD]</code> serão criadas automaticamente para espelhar o recebimento e a retirada.

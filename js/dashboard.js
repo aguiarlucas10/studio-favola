@@ -139,9 +139,10 @@ function renderDashboard(){
          </div>`
     : '<div class="empty" style="padding:20px">Nenhum valor a receber</div>'
 
-  // Custos próximos 30 dias — lista
-  const hoje = new Date()
-  const em30 = new Date(); em30.setDate(hoje.getDate()+30)
+  // Custos próximos 30 dias — lista. Janela em dias CHEIOS: sem zerar as horas,
+  // depois do meio-dia o vencimento de hoje (parseado como T12:00) saía da lista.
+  const hoje = new Date(); hoje.setHours(0,0,0,0)
+  const em30 = new Date(); em30.setDate(em30.getDate()+30); em30.setHours(23,59,59,999)
   const custos30 = S.filter(s=>{
     if(!s.data_pagamento) return false
     const d = new Date(s.data_pagamento+'T12:00:00')
@@ -230,7 +231,7 @@ function openContaModal(id=null){
     <div class="modal-actions">
       ${c?`<button class="btn-delete" onclick="deleteConta(${c.id})">🗑 Apagar</button>`:''}
       <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
-      <button class="btn-save" onclick="saveConta(${c?.id||'null'})">Salvar</button>
+      <button class="btn-save" id="modal-save-btn" onclick="saveConta(${c?.id||'null'})">Salvar</button>
     </div>`
   document.getElementById('modal-overlay').classList.add('open')
   if(c) setTimeout(()=>{
@@ -266,6 +267,7 @@ async function deleteConta(id){
     else toast(friendlyError(error), 'error', 6000)
   })
 }
+saveConta = travaDuplo(saveConta)
 
 function dashDetail(type){
   const panel = document.getElementById('dash-detail-panel')

@@ -278,7 +278,7 @@ function mRetirada(d=null){
     ${fld('Conta',sel('m-conta',[{v:'pessoal',l:'PF (pessoal)'},{v:'jurídica',l:'PJ (jurídica)'}]))}
     ${fld('Status',sel('m-status',['Pago','A Pagar']))}
   </div>
-  <div class="modal-actions"><button class="btn-cancel" onclick="closeModal()">Cancelar</button><button class="btn-save" onclick="saveRetirada()">Salvar</button></div>`
+  <div class="modal-actions"><button class="btn-cancel" onclick="closeModal()">Cancelar</button><button class="btn-save" id="modal-save-btn" onclick="saveRetirada()">Salvar</button></div>`
 }
 
 // ═══════════════════════════════════════════════
@@ -516,6 +516,20 @@ const reRender = { contratos:()=>renderProjetos(), entradas:()=>renderFinanceiro
 function deleteItem(type, id){
   const label = {projeto:'este projeto',entrada:'esta entrada',saida:'esta saída',rt:'esta RT'}[type]||'este registro'
   let msg = 'Esta ação remove o registro permanentemente do banco de dados e não pode ser desfeita.'
+  // Projeto: a FK do banco bloqueia a exclusão enquanto houver lançamentos
+  // vinculados. Se só houver parcelas "A Receber", oferecemos apagar junto.
+  let apagarParcelas = false
+  if(type==='projeto'){
+    const entVinc = E.filter(e=>e.contrato_id===id)
+    const saiVinc = S.filter(s=>s.contrato_id===id)
+    const pendentes = entVinc.filter(e=>e.status!=='Pago')
+    if(saiVinc.length===0 && entVinc.length>0 && entVinc.length===pendentes.length){
+      apagarParcelas = true
+      msg = `Este projeto tem ${pendentes.length} parcela${pendentes.length>1?'s':''} "A Receber" que ${pendentes.length>1?'serão apagadas':'será apagada'} junto. ` + msg
+    } else if(entVinc.length || saiVinc.length){
+      msg = `Este projeto tem ${entVinc.length} entrada(s) e ${saiVinc.length} saída(s) vinculadas — o banco bloqueará a exclusão até você apagar ou desvincular esses lançamentos no Financeiro. ` + msg
+    }
+  }
   // Entrada PF: o espelho [TD] correspondente sai junto quando casa 1:1
   let espelhoJunto = null
   if(type==='entrada'){
@@ -531,6 +545,10 @@ function deleteItem(type, id){
     msg,
     async ()=>{
       const tbl = tableMap[type]
+      if(apagarParcelas){
+        const {error:eParc} = await db.from('entradas').delete().eq('contrato_id',id).neq('status','Pago')
+        if(eParc){ toast(friendlyError(eParc), 'error', 6000); return }
+      }
       const {error} = await db.from(tbl).delete().eq('id',id)
       if(error){ toast(friendlyError(error), 'error', 6000); return }
       if(espelhoJunto){
@@ -554,4 +572,15 @@ function confirmDialog(title, msg, onAccept){
 }
 function confirmAccept(){ document.getElementById('confirm-overlay').classList.remove('open'); _confirmCallback?.() }
 function confirmReject(){ document.getElementById('confirm-overlay').classList.remove('open'); _confirmCallback=null }
+
+// ═══════════════════════════════════════════════
+// GUARDA DE DUPLO CLIQUE (travaDuplo em config.js)
+// Clique duplo em Salvar criava registro duplicado — cada save roda uma vez
+// por vez, com o botão desabilitado durante o await.
+// ═══════════════════════════════════════════════
+saveProjeto  = travaDuplo(saveProjeto)
+saveEntrada  = travaDuplo(saveEntrada)
+saveSaida    = travaDuplo(saveSaida)
+saveRT       = travaDuplo(saveRT)
+saveRetirada = travaDuplo(saveRetirada)
 

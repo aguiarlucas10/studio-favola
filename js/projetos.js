@@ -53,8 +53,12 @@ function renderResultado(){
 
   // Por projeto: entradas + RT recebidas - saídas diretas - rateio geral
   const resultado = P.map(p => {
-    const entradas = E.filter(e=>e.contrato_id===p.id||e.nome_contrato===p.nome_contrato).reduce((a,e)=>a+(e.valor||0),0)
-    const rtRecebida = R.filter(r=>(r.projeto===p.nome_contrato||r.projeto===p.projeto)&&r.status==='Pago').reduce((a,r)=>a+(r.valor_rt||0),0)
+    // Receita REALIZADA: só entradas pagas (parcela futura não é resultado);
+    // vínculo por id com precedência, nome só quando não há id e não é vazio
+    const entradas = E.filter(e=>
+      (e.contrato_id != null ? e.contrato_id===p.id : (!!e.nome_contrato && e.nome_contrato===p.nome_contrato))
+      && e.status==='Pago').reduce((a,e)=>a+(e.valor||0),0)
+    const rtRecebida = R.filter(r=>!!r.projeto&&r.projeto===p.nome_contrato&&r.status==='Pago').reduce((a,r)=>a+(r.valor_rt||0),0)
     const saidasDiretas = S.filter(s=>s.contrato_id===p.id && tiposOperacionais.includes(s.tipo_saida) && s.status==='Pago').reduce((a,s)=>a+(s.valor||0),0)
     const rateio = p.status==='Ativo' ? rateioUnitario : 0
     const receita = entradas + rtRecebida

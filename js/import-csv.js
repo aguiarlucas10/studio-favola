@@ -118,7 +118,7 @@ function renderImportPreview(){
       <span style="font-size:11px;color:var(--warm-gray)">${csvRows.length} transações encontradas · <strong>${totalImportar} para importar</strong> · ${fmt(totalValor)}</span>
       <div style="display:flex;gap:8px">
         <button class="btn-secondary" onclick="csvIgnorarTodos()" style="font-size:10px;padding:6px 12px">Desmarcar todos</button>
-        <button class="btn-primary" onclick="importarCSV()" style="font-size:10px;padding:6px 14px">✓ Importar selecionados</button>
+        <button class="btn-primary" id="csv-import-btn" onclick="importarCSV()" style="font-size:10px;padding:6px 14px">✓ Importar selecionados</button>
       </div>
     </div>
     <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
@@ -212,18 +212,18 @@ async function importarCSV(){
     }
   }
 
-  // Inserir em lotes
+  // Inserir em lotes — erro em um lote não pode ser silencioso: a sócia
+  // precisa saber O QUE falhou sem abrir o console
   let erros = 0
   if(entradas.length){
     const {error} = await db.from('entradas').insert(entradas)
-    if(error){ erros++; console.error('Entradas:', error.message) }
+    if(error){ erros++; toast('Falha ao importar as entradas: '+friendlyError(error), 'error', 8000) }
   }
   if(saidas.length){
     const {error} = await db.from('saidas').insert(saidas)
-    if(error){ erros++; console.error('Saídas:', error.message) }
+    if(error){ erros++; toast('Falha ao importar as saídas: '+friendlyError(error), 'error', 8000) }
   }
-
-  if(erros){ toast('Alguns registros não foram importados. Verifique o console do navegador para detalhes.', 'error', 6000); return }
+  if(erros) return
 
   const msg = `✓ Importados: ${entradas.length} entradas + ${saidas.length} saídas`
   closeImportCSV()
@@ -231,4 +231,5 @@ async function importarCSV(){
   renderFinanceiro()
   toast(msg, 'success')
 }
+importarCSV = travaDuplo(importarCSV, 'csv-import-btn')
 

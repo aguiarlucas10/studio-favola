@@ -16,10 +16,10 @@ function filterRT(f,btn){
 // tem entrada separada — a própria RT paga já é o registro do recebimento. Por isso
 // marcamos SÓ o caso positivo (✓ no caixa) e deixamos o resto em branco, sem alarmar.
 function rtEntradaNoCaixa(r){
-  if(r.status!=='Pago') return null
-  return E.find(e => e.tipo_entrada==='rt'
-    && (e.nome_contrato===r.projeto || e.projeto===r.projeto)
-    && Math.abs((e.valor||0)-(r.valor_rt||0)) < 0.01)
+  if(r.status!=='Pago' || !r.projeto) return null
+  return E.find(e => (e.tipo_entrada||'').toLowerCase()==='rt'
+    && e.nome_contrato===r.projeto
+    && aprox(e.valor, r.valor_rt))
 }
 
 function renderRT(){

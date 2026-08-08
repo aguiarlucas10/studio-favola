@@ -37,6 +37,25 @@ const g = id => document.getElementById(id)?.value
 // Compara valores monetários com tolerância de 1 centavo (nunca === entre floats)
 const aprox = (a,b) => Math.abs((a||0)-(b||0)) < 0.01
 
+// Guarda de duplo clique: envolve um save assíncrono — cliques repetidos
+// enquanto a gravação anterior não terminou são ignorados, e o botão (se
+// existir) fica desabilitado como feedback. Uso: saveX = travaDuplo(saveX)
+function travaDuplo(fn, btnId='modal-save-btn'){
+  let rodando = false
+  return async function(...args){
+    if(rodando) return
+    rodando = true
+    const btn = document.getElementById(btnId)
+    if(btn) btn.disabled = true
+    try { return await fn.apply(this, args) }
+    finally {
+      rodando = false
+      const b = document.getElementById(btnId)
+      if(b) b.disabled = false
+    }
+  }
+}
+
 // Feedback flutuante on-brand (substitui alert() nativo)
 function toast(msg, type='info', ms=4500){
   const fb = document.createElement('div')
@@ -55,6 +74,8 @@ function friendlyError(error){
     [/row-level security/i, 'Você não tem permissão para fazer isso. Confirme que está logada com a conta certa.'],
     [/jwt|session|not authenticated/i, 'Sua sessão expirou. Atualize a página e faça login novamente.'],
     [/duplicate key|already exists/i, 'Já existe um registro com esses dados.'],
+    // FK em DELETE vem antes da regra genérica: a causa é o oposto (há registros DEMAIS)
+    [/update or delete on table .* violates foreign key/i, 'Não é possível apagar: ainda existem lançamentos vinculados a este registro. Apague ou desvincule as entradas/saídas dele primeiro.'],
     [/foreign key|violates foreign/i, 'Não foi possível salvar: um registro relacionado não foi encontrado (ex: contrato apagado).'],
     [/network|fetch|failed to fetch/i, 'Falha de conexão. Verifique sua internet e tente novamente.'],
     [/null value in column/i, 'Faltou preencher um campo obrigatório.'],

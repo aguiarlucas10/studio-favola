@@ -74,7 +74,7 @@ function openAjusteCaixa(){
     </div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
-      <button class="btn-save" onclick="solicitarAjusteCaixa()" ${pendente?'disabled style="opacity:.4;cursor:not-allowed"':''}>Solicitar Ajuste</button>
+      <button class="btn-save" id="aj-btn-solicitar" onclick="solicitarAjusteCaixa()" ${pendente?'disabled style="opacity:.4;cursor:not-allowed"':''}>Solicitar Ajuste</button>
     </div>`
   document.getElementById('modal-overlay').classList.add('open')
   if(!pendente) document.getElementById('aj-data').valueAsDate = new Date()
@@ -141,6 +141,10 @@ async function responderAjuste(id, decisao){
 
   toast(`✓ Ajuste aprovado e aplicado · novo caixa ${fmt(ajuste.valor_novo)}`, 'success', 5000)
 }
+
+// Guarda de duplo clique (o banner/modal fica aberto durante o await)
+solicitarAjusteCaixa = travaDuplo(solicitarAjusteCaixa, 'aj-btn-solicitar')
+responderAjuste = travaDuplo(responderAjuste, 'aj-sem-botao-unico')
 
 function verDetalheAjuste(id){
   const a = AJ.find(x=>x.id===id)

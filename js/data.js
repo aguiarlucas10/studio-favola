@@ -144,7 +144,7 @@ function contratoAReceber(p){
         ? e.contrato_id === p.id
         : (!!e.nome_contrato && e.nome_contrato === p.nome_contrato))
       && e.status!=='Pago'
-      && e.tipo_entrada!=='rt')
+      && (e.tipo_entrada||'').toLowerCase()!=='rt')
     .reduce((a,e)=>a+(e.valor||0),0)
 }
 

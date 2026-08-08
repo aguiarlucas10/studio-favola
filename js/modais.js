@@ -366,7 +366,12 @@ async function garanteEspelhoTD(e){
   const {error} = await db.from('saidas').insert({
     tipo_saida:'retirada de lucros', descricao:`[TD] ${e.nome_contrato||''}`.trim(),
     valor:e.valor, data_pagamento:e.data_pagamento, conta:'pessoal', socia:'Ambas',
-    status:'Pago', mes_ano:e.mes_ano,
+    status:'Pago',
+    // Deriva de data_pagamento em vez de copiar e.mes_ano: quando a entrada vem
+    // das arrays em memória (quitação em massa), normalizaArrays() já converteu
+    // o campo para a chave MM/YYYY — gravá-lo assim poluiria o banco com um
+    // formato que não é o legado 01/MM/YYYY usado em todas as outras escritas.
+    mes_ano: mesAnoDeData(e.data_pagamento),
     contrato_id:e.contrato_id||null, nome_contrato:e.nome_contrato||null
   })
   if(error) toast('O espelho [TD] não foi criado: '+friendlyError(error), 'error', 6000)
@@ -402,7 +407,7 @@ async function saveEntrada(id){
   const ficouPago = status==='Pago' && (!id || (anterior && anterior.status!=='Pago'))
   if(isPF && ficouPago){
     await garanteEspelhoTD({nome_contrato:nomeContrato, valor, data_pagamento:data,
-                            mes_ano:mes, contrato_id:proj?.id||null})
+                            contrato_id:proj?.id||null})
   }
   // Edição de entrada PF que JÁ era paga: acompanha o espelho se casar 1:1
   else if(isPF && id && anterior && anterior.status==='Pago' && status==='Pago'

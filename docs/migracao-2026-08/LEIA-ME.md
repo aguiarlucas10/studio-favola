@@ -15,9 +15,23 @@ colar o conteúdo do arquivo → Run).
 | 6º | `04b-corrige-mes-ano-csv.sql` | Conserta `mes_ano` inválido de CSVs antigos | Confira antes o preview da consulta 0.8. Se 0.8 voltou vazio, pule este arquivo. |
 | 7º | `05-rpc-aprovar-ajuste.sql` | Aprovação atômica de ajuste | **Obrigatório**: sem ele, aprovar ajuste de caixa no app falha. |
 
-Fora do SQL (painel do Supabase): **Authentication → Sign In / Providers →
-desativar "Allow new users to sign up"**, e conferir em Authentication → Users
-que só existem as contas das duas sócias.
+## O que fazer com cada resultado do diagnóstico
+
+Não precisa reportar tudo — a maioria é conferência local antes de seguir.
+
+| Consulta | O que fazer com o resultado |
+|---|---|
+| 0.1 / 0.2 / 0.3 / 0.4 | Só olhar (os passos 01–03 corrigem o que for preciso de qualquer forma). |
+| **0.5** | **Conferir com a Fer**: são os contratos que voltarão a ter "A Receber". Algum já está quitado? Zere o `a_receber` dele antes do passo 04. |
+| 0.6 / 0.6b | Só olhar: os formatos devem ser `DD/MM/YYYY`, `MM/YYYY`, `YYYY-MM` ou `YYYY/MM`. Se aparecer algum diferente, me avise. |
+| **0.7 e 0.7b** | **Colar para mim** — é o que resolve o bug do "Duplicar entrada". |
+| 0.8 | Basta me dizer se voltou vazia (então pule o passo 04b) ou quantas linhas vieram. |
+| **0.9** | **Conferir você**: as duas sócias aparecem? Se sim, pode rodar o passo 02. Se faltar alguma, me avise antes. |
+
+## Fora do SQL (painel do Supabase)
+
+**Authentication → Sign In / Providers → desativar "Allow new users to sign up"**,
+e conferir em Authentication → Users que só existem as contas das duas sócias.
 
 Depois de tudo: abra o app, confira que as abas carregam, e teste no console
 (F12) que `await db.from('ajustes_caixa').insert({ valor_novo: 1, status: 'aprovado' })`

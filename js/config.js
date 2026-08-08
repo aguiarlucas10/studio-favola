@@ -42,15 +42,16 @@ const aprox = (a,b) => Math.abs((a||0)-(b||0)) < 0.01
 // existir) fica desabilitado como feedback. Uso: saveX = travaDuplo(saveX)
 function travaDuplo(fn, btnId='modal-save-btn'){
   let rodando = false
+  const btnEl = () => btnId ? document.getElementById(btnId) : null
   return async function(...args){
     if(rodando) return
     rodando = true
-    const btn = document.getElementById(btnId)
+    const btn = btnEl()
     if(btn) btn.disabled = true
     try { return await fn.apply(this, args) }
     finally {
       rodando = false
-      const b = document.getElementById(btnId)
+      const b = btnEl()
       if(b) b.disabled = false
     }
   }

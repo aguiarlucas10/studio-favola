@@ -25,9 +25,12 @@ function openModal(type, data=null){
   const map={projeto:mProjeto,entrada:mEntrada,saida:mSaida,rt:mRT,retirada:mRetirada}
   document.getElementById('modal-content').innerHTML = map[type]?.(data)||''
   document.getElementById('modal-overlay').classList.add('open')
-  if(data) setTimeout(()=>{ preenchModal(type,data); if(type==='entrada') togglePFNotice(); if(type==='rt') toggleRTNotice() },50)
-  else if(type==='entrada') setTimeout(togglePFNotice, 50)
-  else if(type==='rt') setTimeout(toggleRTNotice, 50)
+  // Preenchimento síncrono: innerHTML já montou o DOM. Com o setTimeout(50) que
+  // havia aqui, clicar em Salvar antes dos 50ms disparava o onclick inline
+  // (saveProjeto(null)) e CRIAVA um registro novo em vez de editar o existente.
+  if(data) preenchModal(type, data)
+  if(type==='entrada') togglePFNotice()
+  else if(type==='rt') toggleRTNotice()
 }
 function closeModal(){document.getElementById('modal-overlay').classList.remove('open')}
 
@@ -83,14 +86,17 @@ function toggleRTNotice(){
   const notice = document.getElementById('rt-pf-notice')
   if(notice) notice.style.display = ((conta==='pessoal'||conta==='PF') && status==='Pago') ? 'block' : 'none'
 }
-// Valor RT = venda × % — preenchido automaticamente, mas editável
-// (só recalcula quando venda/% mudam; não sobrescreve edição manual à toa)
-function rtRecalc(){
+// Valor RT = venda × %, preenchido automaticamente e ainda editável.
+// `auto` só é verdadeiro em RT NOVA: numa RT existente, mexer na venda não pode
+// reescrever o "A Receber", que costuma guardar um recebimento parcial
+// negociado (RT de 1.000 com 400 já recebidos → a_receber 600). Ao salvar,
+// saveRT zera o a_receber sozinho quando o status vira Pago.
+function rtRecalc(auto){
   const venda = parseFloat(g('m-venda'))||0
   const pct = parseFloat(g('m-pct'))||0
   const el = document.getElementById('m-valor')
   if(el && venda && pct) el.value = Math.round(venda*pct*100)/100
-  rtRecalcAReceber()
+  if(auto) rtRecalcAReceber()
 }
 // A Receber acompanha o status: Pago → 0; senão → Valor RT atual.
 // Continua editável para registrar recebimento parcial.
@@ -100,7 +106,12 @@ function rtRecalcAReceber(){
 }
 
 function mProjeto(d=null){
-  const genOnChange = d ? '' : ' onchange="gerarParcelasPreview()"'
+  // oninput, não onchange: em input[type=number] o `change` só dispara no blur,
+  // e o blur é causado pelo próprio mousedown no botão Salvar — a prévia crescia
+  // entre o mousedown e o mouseup, o botão descia e o clique não acontecia
+  // ("cliquei em Salvar e nada aconteceu"). Com oninput a prévia já está no
+  // lugar antes de qualquer clique.
+  const genOnChange = d ? '' : ' oninput="gerarParcelasPreview()"'
   return `<h3>${d?'Editar Projeto':'Novo Projeto'}</h3><div class="modal-divider"></div>
   <div class="mg">
     ${fld('Nº','<input id="m-num" type="number">')}
@@ -250,13 +261,13 @@ function mRT(d=null){
     ${fld('Categoria',sel('m-cat',['Marcenaria','Móveis soltos','Pedras','Cortinas e persianas','Eletros','Iluminação','Tapetes','Obra','Decoração','Enxoval','Tecidos','Vinílico','Serralheria']))}
     ${fld('Fornecedor','<input id="m-forn">')}
     ${fld('Contato','<input id="m-contato">')}
-    ${fld('Valor da Venda (R$)','<input id="m-venda" type="number" step="0.01" oninput="rtRecalc()">')}
-    ${fld('% RT (ex: 0.10)','<input id="m-pct" type="number" step="0.01" value="0.10" oninput="rtRecalc()">')}
-    ${fld('Valor RT (R$)','<input id="m-valor" type="number" step="0.01" oninput="rtRecalcAReceber()">')}
+    ${fld('Valor da Venda (R$)',`<input id="m-venda" type="number" step="0.01" oninput="rtRecalc(${d?0:1})">`)}
+    ${fld('% RT (ex: 0.10)',`<input id="m-pct" type="number" step="0.01" value="0.10" oninput="rtRecalc(${d?0:1})">`)}
+    ${fld('Valor RT (R$)',`<input id="m-valor" type="number" step="0.01"${d?'':' oninput="rtRecalcAReceber()"'}>`)}
     ${fld('A Receber (R$)','<input id="m-areceber" type="number" step="0.01">')}
     ${fld('Data Fechamento','<input id="m-data" type="date">')}
     ${fld('Conta',`<select id="m-conta" onchange="toggleRTNotice()"><option value="pessoal">PF (pessoal)</option><option value="jurídica">PJ (jurídica)</option></select>`)}
-    ${fld('Status',`<select id="m-status" onchange="toggleRTNotice();rtRecalcAReceber()"><option value="A receber">A receber</option><option value="Pago">Pago</option><option value="Inadimplência">Inadimplência</option></select>`)}
+    ${fld('Status',`<select id="m-status" onchange="toggleRTNotice()${d?'':';rtRecalcAReceber()'}"><option value="A receber">A receber</option><option value="Pago">Pago</option><option value="Inadimplência">Inadimplência</option></select>`)}
   </div>
   <div id="rt-pf-notice" style="display:none;margin:8px 0 4px;padding:11px 14px;background:#FEF3E2;border:1px solid #F0C070;border-radius:3px;font-size:11px;color:#7A5000;line-height:1.6">
     ⚠️ <strong>RT PF + Pago:</strong> uma entrada e uma saída <code>[TD]</code> serão criadas automaticamente para espelhar o recebimento e a retirada.
@@ -541,14 +552,22 @@ function deleteItem(type, id){
   // vinculados. Se só houver parcelas "A Receber", oferecemos apagar junto.
   let apagarParcelas = false
   if(type==='projeto'){
-    const entVinc = E.filter(e=>e.contrato_id===id)
-    const saiVinc = S.filter(s=>s.contrato_id===id)
-    const pendentes = entVinc.filter(e=>e.status!=='Pago')
-    if(saiVinc.length===0 && entVinc.length>0 && entVinc.length===pendentes.length){
+    const p = P.find(x=>x.id===id)
+    // Por contrato_id: é o que a FK bloqueia e o que podemos apagar junto.
+    const entFK = E.filter(e=>e.contrato_id===id)
+    const saiFK = S.filter(s=>s.contrato_id===id)
+    // Por vínculo completo (inclui os legados ligados só por nome/projeto):
+    // esses o banco NÃO bloqueia, e ficariam órfãos sem aviso.
+    const soTexto = [...E, ...S].filter(r=>r.contrato_id==null && doContrato(r,p)).length
+    const pendentes = entFK.filter(e=>e.status!=='Pago')
+    if(saiFK.length===0 && entFK.length>0 && entFK.length===pendentes.length){
       apagarParcelas = true
       msg = `Este projeto tem ${pendentes.length} parcela${pendentes.length>1?'s':''} "A Receber" que ${pendentes.length>1?'serão apagadas':'será apagada'} junto. ` + msg
-    } else if(entVinc.length || saiVinc.length){
-      msg = `Este projeto tem ${entVinc.length} entrada(s) e ${saiVinc.length} saída(s) vinculadas — o banco bloqueará a exclusão até você apagar ou desvincular esses lançamentos no Financeiro. ` + msg
+    } else if(entFK.length || saiFK.length){
+      msg = `Este projeto tem ${entFK.length} entrada(s) e ${saiFK.length} saída(s) vinculadas — o banco bloqueará a exclusão até você apagar ou desvincular esses lançamentos no Financeiro. ` + msg
+    }
+    if(soTexto){
+      msg = `Atenção: ${soTexto} lançamento(s) antigo(s) estão ligados a este projeto apenas pelo nome e continuarão no Financeiro, sem projeto. ` + msg
     }
   }
   // Entrada PF: o espelho [TD] correspondente sai junto quando casa 1:1

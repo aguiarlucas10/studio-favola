@@ -22,6 +22,7 @@ async function checkSession(){
 }
 // Sessão encerrada/expirada em qualquer momento → volta à tela de login.
 // Guarda em currentUserId evita loop de reload na própria tela de login.
+// typeof: currentUserId é declarado em data.js, carregado DEPOIS deste arquivo
 db.auth.onAuthStateChange(event => {
-  if(event === 'SIGNED_OUT' && currentUserId) location.reload()
+  if(event === 'SIGNED_OUT' && typeof currentUserId !== 'undefined' && currentUserId) location.reload()
 })

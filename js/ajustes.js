@@ -142,9 +142,11 @@ async function responderAjuste(id, decisao){
   toast(`✓ Ajuste aprovado e aplicado · novo caixa ${fmt(ajuste.valor_novo)}`, 'success', 5000)
 }
 
-// Guarda de duplo clique (o banner/modal fica aberto durante o await)
+// Guarda de duplo clique (o banner/modal fica aberto durante o await).
+// responderAjuste não tem botão único — aprovar e rejeitar são dois — então a
+// trava é só pela flag; o banner é reconstruído por checkAjustePendente ao fim.
 solicitarAjusteCaixa = travaDuplo(solicitarAjusteCaixa, 'aj-btn-solicitar')
-responderAjuste = travaDuplo(responderAjuste, 'aj-sem-botao-unico')
+responderAjuste = travaDuplo(responderAjuste, null)
 
 function verDetalheAjuste(id){
   const a = AJ.find(x=>x.id===id)

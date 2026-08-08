@@ -70,7 +70,7 @@ function preenchModal(type, data){
   }
 }
 
-function fld(label,html,full){return `<div class="field${full?' full':''}""><label>${label}</label>${html}</div>`}
+function fld(label,html,full){return `<div class="field${full?' full':''}"><label>${label}</label>${html}</div>`}
 function sel(id,opts,cur=''){return `<select id="${id}">${opts.map(o=>{const v=typeof o==='string'?o:o.v,l=typeof o==='string'?o:o.l;return`<option value="${v}"${v===cur?' selected':''}>${l}</option>`}).join('')}</select>`}
 function togglePFNotice(){
   const conta = document.getElementById('m-conta')?.value

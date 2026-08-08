@@ -111,11 +111,17 @@ function calcFluxoMesAtual(){
 
 // "A receber" de um contrato = soma das parcelas (entradas) pendentes daquele contrato.
 // Fonte única da verdade: em vez do campo a_receber digitado à mão, soma as entradas
-// não pagas vinculadas ao contrato (por id ou nome). Exclui RT (contabilizada em rt_comissoes).
+// não pagas vinculadas ao contrato. Exclui RT (contabilizada em rt_comissoes).
+// A coluna contratos.a_receber é LEGADA: os saldos antigos viraram entradas
+// '[Backfill saldo legado]' via docs/migracao-2026-08.sql (Seção 4).
+// Vínculo: contrato_id tem precedência; nome só vale quando a entrada não tem id
+// e o nome não é vazio (senão ''==='' e null===null casariam entradas avulsas).
 function contratoAReceber(p){
   if(!p) return 0
   return E.filter(e =>
-      (e.contrato_id===p.id || e.nome_contrato===p.nome_contrato)
+      (e.contrato_id != null
+        ? e.contrato_id === p.id
+        : (!!e.nome_contrato && e.nome_contrato === p.nome_contrato))
       && e.status!=='Pago'
       && e.tipo_entrada!=='rt')
     .reduce((a,e)=>a+(e.valor||0),0)

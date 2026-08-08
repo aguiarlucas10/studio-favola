@@ -187,8 +187,7 @@ async function importarCSV(){
   let entradas=[], saidas=[]
 
   for(const r of paraImportar){
-    const [d,m,y] = r.data.split('-')
-    const mesAno = d&&m&&y ? `01/${m}/${y}` : mesAtual()
+    const mesAno = mesAnoDeData(r.data)
     const vinculo = r.vinculo || ''
     const [cid, cnome] = vinculo ? vinculo.split('|') : [null,null]
     const proj = cnome ? P.find(p=>p.nome_contrato===cnome) : null

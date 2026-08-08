@@ -12,12 +12,21 @@ const db = createClient(SUPABASE_URL, SUPABASE_KEY)
 // ═══════════════════════════════════════════════
 const fmt = v => (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
 const fmtD = d => d ? new Date(d+'T12:00:00').toLocaleDateString('pt-BR') : '—'
-const mesAtual = () => { const d=new Date(); return `01/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` }
-// Deriva o mes_ano (formato legado 01/MM/YYYY) a partir de uma data ISO (YYYY-MM-DD).
-// Substitui o campo "Mês/Ano" digitado à mão. Cai no mês atual se a data for inválida/vazia.
+// Chave canônica do mês corrente no formato em memória (MM/YYYY, pós-normalizaMesAno).
+// Toda comparação com e.mes_ano/s.mes_ano usa esta chave.
+const mesAtual = () => { const d=new Date(); return `${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` }
+// Rótulo de exibição de uma chave MM/YYYY: "agosto de 2026"
+const mesAnoLabel = mesAno => {
+  const [m,y] = String(mesAno||'').split('/').map(Number)
+  if(!m || !y) return String(mesAno||'')
+  return new Date(y, m-1, 1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'})
+}
+// Deriva o mes_ano GRAVADO NO BANCO (formato legado 01/MM/YYYY) a partir de uma
+// data ISO (YYYY-MM-DD). Cai no mês atual se a data for inválida/vazia.
 const mesAnoDeData = d => {
   if(d && /^\d{4}-\d{2}-\d{2}/.test(d)){ const [y,m]=d.split('-'); return `01/${m}/${y}` }
-  return mesAtual()
+  const h = new Date()
+  return `01/${String(h.getMonth()+1).padStart(2,'0')}/${h.getFullYear()}`
 }
 const statusMap = { Pago:'bg-green','A Receber':'bg-amber','A Pagar':'bg-amber',Atrasado:'bg-red',Ativo:'bg-green',Finalizado:'bg-gray',Pausado:'bg-amber',Proposta:'bg-blue',Descontinuado:'bg-gray','A receber':'bg-amber','Inadimplência':'bg-red' }
 // Escapa texto vindo do banco/CSV antes de inserir via innerHTML (previne XSS)

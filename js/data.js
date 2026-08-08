@@ -14,7 +14,7 @@ async function initApp(){
   currentUserName = u?.nome||user.email.split('@')[0]
   document.getElementById('user-name').textContent = currentUserName
   document.getElementById('dash-month').textContent = new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'})
-  document.getElementById('socias-month').textContent = mesAtual()
+  document.getElementById('socias-month').textContent = mesAnoLabel(mesAtual())
   await loadData()
   await loadAjustes()
   renderDashboard()

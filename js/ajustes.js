@@ -125,8 +125,7 @@ async function responderAjuste(id, decisao){
   // Aprovado — aplica o ajuste no banco
   const { diferenca, valor_novo, motivo, data_referencia } = ajuste
   const data = data_referencia || new Date().toISOString().slice(0,10)
-  const d = new Date(data+'T12:00:00')
-  const mes = `01/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`
+  const mes = mesAnoDeData(data)
 
   let errAjuste
   if(diferenca > 0){

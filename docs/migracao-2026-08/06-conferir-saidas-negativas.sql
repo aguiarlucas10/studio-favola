@@ -28,13 +28,51 @@ select count(*) as qtd,
 from saidas
 where valor < 0 and status = 'Pago';
 
--- ═══════════════════════════════════════════════════════════════
--- 6.3 CORREÇÃO — rode APENAS se 6.1 retornou linhas e você conferiu
---     que todas são de fato despesas (não estornos legítimos lançados
---     como saída negativa de propósito).
+-- ───────────────────────────────────────────────────────────────
+-- RESULTADO EM 08/08/2026 — a 6.1 retornou 2 linhas:
 --
---     ⚠️ Isto MUDA o saldo do caixa. Confira o valor de 6.2 com a Fer
---     antes, para que ninguém estranhe a variação.
+--   id 24 | 2023-07-25 | TD Contrato Ap Grazi e André |   -167,00 | parcela 3/7
+--   id 27 | 2023-08-07 | TD Contrato Ap Margareth     | -3.670,00 | parcela 1/2
+--
+-- Ambas são espelhos [TD] (retirada de lucros) lançados manualmente em
+-- 2023 — não vieram do import de CSV. Somam R$ 3.837 com o sinal
+-- trocado, o que infla o caixa em R$ 7.674 (deixa de subtrair 3.837 e
+-- ainda soma 3.837).
+-- ───────────────────────────────────────────────────────────────
+
+-- 6.4 ⭐ ANTES DE CORRIGIR: as entradas que esses espelhos acompanham
+--     estão com o sinal certo? Se a entrada também estiver negativa, o
+--     par se comporta de outro jeito e corrigir só a saída piora a conta.
+--     REPORTE O RESULTADO.
+select 'entrada' as origem, id, data_pagamento, nome_contrato, projeto,
+       valor, conta, status, obs
+from entradas
+where data_pagamento between '2023-07-01' and '2023-09-30'
+  and (coalesce(nome_contrato,'') || ' ' || coalesce(projeto,'')) ~* '(Grazi|André|Andre|Margareth)'
+union all
+select 'saida', id, data_pagamento, nome_contrato, projeto,
+       valor, conta, status, obs
+from saidas
+where data_pagamento between '2023-07-01' and '2023-09-30'
+  and (coalesce(nome_contrato,'') || ' ' || coalesce(descricao,'')) ~* '(Grazi|André|Andre|Margareth)'
+order by origem, data_pagamento;
+
+-- 6.5 Confirmação de que não há mais nenhuma entrada negativa no banco
+--     (o mesmo erro de sinal do outro lado). Esperado: vazio.
+select id, data_pagamento, nome_contrato, valor, status, obs
+from entradas
+where valor < 0;
+
+-- ═══════════════════════════════════════════════════════════════
+-- 6.6 CORREÇÃO — rode APENAS depois de conferir 6.4 e 6.5 e de alinhar
+--     com a Fer que o caixa vai CAIR R$ 7.674.
+--
+--     Restrito aos dois ids conhecidos de propósito: um `where valor < 0`
+--     genérico pegaria também qualquer estorno futuro lançado de
+--     propósito como negativo.
 -- ═══════════════════════════════════════════════════════════════
 
--- update saidas set valor = abs(valor) where valor < 0;
+-- update saidas set valor = abs(valor) where id in (24, 27) and valor < 0;
+
+-- Conferência depois de rodar (esperado: 167.00 e 3670.00, positivos):
+-- select id, data_pagamento, descricao, valor from saidas where id in (24,27);

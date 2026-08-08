@@ -8,7 +8,10 @@
 - [x] **Passo 03** — trigger de dupla aprovação
 - [x] **Passo 04** — backfill do a receber legado
 - [x] **Passo 05** — RPC `aprovar_ajuste`
-- [ ] **Painel** — Authentication → Sign In / Providers → desativar "Allow new users to sign up"
+- [x] **Painel** — signup público desativado
+- [ ] **Passo 06** — `06-conferir-saidas-negativas.sql`: rode a consulta 6.1.
+      Se voltar vazia, ignore o arquivo. Se voltar linhas, elas estão
+      **inflando o caixa** e o UPDATE do fim corrige (confira 6.2 com a Fer antes).
 - [ ] **Conferir no app** com a Fer antes do push
 
 **Passo 04b: dispensado** — a consulta 0.8 voltou vazia (nenhum `mes_ano`

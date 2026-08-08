@@ -154,7 +154,7 @@ function renderImportPreview(){
                 <option value="">Geral</option>${projOpts}
               </select>
             </td>
-            <td style="text-align:right;font-family:'Libre Baskerville',serif;font-size:12px;${corValor}">${sinal}${fmt(r.valor)}</td>
+            <td style="text-align:right;font-family:'Libre Baskerville',serif;font-size:12px;${corValor}">${sinal}${fmt(Math.abs(r.valor))}</td>
           </tr>`}).join('')}
       </tbody>
     </table></div>`
@@ -203,7 +203,10 @@ async function importarCSV(){
     } else {
       saidas.push({
         tipo_saida: r.tipo, descricao:r.desc,
-        valor: r.valor, data_pagamento:r.data,
+        // Math.abs: no extrato do Nubank as saídas vêm negativas, e o app
+        // trata `saidas.valor` como grandeza positiva (calcSaldoAcumulado faz
+        // entradas − saídas). Gravar negativo faria a despesa AUMENTAR o caixa.
+        valor: Math.abs(r.valor), data_pagamento:r.data,
         conta: contaGlobal, status:'Pago', mes_ano:mesAno,
         contrato_id: cid?parseInt(cid):null,
         nome_contrato: cnome||null,

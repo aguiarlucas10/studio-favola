@@ -1,12 +1,15 @@
 -- ═══════════════════════════════════════════════════════════════
--- PASSO 4b — Corrige mes_ano inválido de importações CSV antigas
--- (bug já corrigido no app: gravava '01/MM/DD' com o dia no lugar do ano).
+-- PASSO 4b — NÃO É NECESSÁRIO. NÃO RODE.
 --
--- ⚠️ Confira antes o preview da consulta 0.8 do diagnóstico — são essas
--- as linhas que serão corrigidas. SE 0.8 VOLTOU VAZIO, PULE ESTE PASSO.
+-- Verificado em 08/08/2026: a consulta 0.8 do diagnóstico voltou VAZIA,
+-- ou seja, não existe nenhum mes_ano inválido no banco. O bug que os
+-- gerava (import de CSV gravando '01/MM/DD', com o dia no lugar do ano)
+-- foi corrigido no app, então não surgirão novos.
 --
--- Deriva o valor correto de data_pagamento; só toca linhas com formato
--- inválido E data preenchida. Pode rodar o arquivo inteiro de uma vez.
+-- Este arquivo fica apenas como remédio, caso algum dia a consulta 0.8
+-- volte a retornar linhas. Antes de rodar, confira o preview dela — os
+-- UPDATEs abaixo só tocam linhas com formato inválido E data preenchida,
+-- derivando o valor correto de data_pagamento.
 -- ═══════════════════════════════════════════════════════════════
 
 update entradas

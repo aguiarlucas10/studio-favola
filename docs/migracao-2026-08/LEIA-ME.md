@@ -1,19 +1,19 @@
 # Migração 2026-08 — passo a passo
 
-## ✅ Estado em 08/08/2026
+## ✅ Estado em 08/08/2026 — SQL concluído
 
-Diagnóstico concluído: 0.5 e 0.9 conferidas ✅, 0.7/0.8/0.10/0.11/0.12 reportadas.
-Falta rodar, nesta ordem:
-
-- [ ] **Passo 01** — colunas de `ajustes_caixa`
-- [ ] **Passo 02** — allowlist
-- [ ] **Passo 03** — trigger de dupla aprovação
-- [ ] **Passo 04** — backfill do a receber legado
-- [ ] **Passo 05** — RPC `aprovar_ajuste` (**obrigatório**: sem ele o app não aprova ajuste)
+- [x] Diagnóstico (0.5 e 0.9 conferidas; 0.7/0.8/0.10/0.11/0.12 reportadas)
+- [x] **Passo 01** — colunas de `ajustes_caixa`
+- [x] **Passo 02** — allowlist
+- [x] **Passo 03** — trigger de dupla aprovação
+- [x] **Passo 04** — backfill do a receber legado
+- [x] **Passo 05** — RPC `aprovar_ajuste`
 - [ ] **Painel** — Authentication → Sign In / Providers → desativar "Allow new users to sign up"
 - [ ] **Conferir no app** com a Fer antes do push
 
-Passo 04b: **pular** (0.8 voltou vazia — não há `mes_ano` inválido).
+**Passo 04b: dispensado** — a consulta 0.8 voltou vazia (nenhum `mes_ano`
+inválido no banco) e o bug que os gerava já foi corrigido no app. O arquivo
+fica só como remédio, caso a 0.8 volte a retornar linhas algum dia.
 
 
 Mesma migração de `docs/migracao-2026-08.sql`, separada em arquivos para rodar

@@ -57,22 +57,79 @@ where data_pagamento between '2023-07-01' and '2023-09-30'
   and (coalesce(nome_contrato,'') || ' ' || coalesce(descricao,'')) ~* '(Grazi|André|Andre|Margareth)'
 order by origem, data_pagamento;
 
--- 6.5 Confirmação de que não há mais nenhuma entrada negativa no banco
+-- 6.5 Confirmação de que não há nenhuma entrada negativa no banco
 --     (o mesmo erro de sinal do outro lado). Esperado: vazio.
 select id, data_pagamento, nome_contrato, valor, status, obs
 from entradas
 where valor < 0;
 
--- ═══════════════════════════════════════════════════════════════
--- 6.6 CORREÇÃO — rode APENAS depois de conferir 6.4 e 6.5 e de alinhar
---     com a Fer que o caixa vai CAIR R$ 7.674.
+-- ───────────────────────────────────────────────────────────────
+-- RESULTADO DE 6.4 E 6.5 (08/08/2026) — o problema é MAIOR que o sinal
 --
---     Restrito aos dois ids conhecidos de propósito: um `where valor < 0`
---     genérico pegaria também qualquer estorno futuro lançado de
---     propósito como negativo.
+--   data       entrada PF        espelho [TD]   confere?
+--   25/07/23   1.833 (3/7)         -167,00      NÃO
+--   07/08/23   3.900 (1/2)       -3.670,00      NÃO
+--   25/08/23   1.833 (4/7)        1.833,00      sim
+--   05/09/23   3.900 (2/2)           15,00      NÃO  ← nem é negativo
+--   25/09/23   1.833 (5/7)        1.833,00      sim
+--
+-- Quando o espelho está certo, ele é IGUAL à entrada (a retirada espelha
+-- o valor que caiu na conta PF). Nos três errados o valor também está
+-- errado, não só o sinal — e um deles (id 41, R$ 15) nem aparecia na
+-- consulta 6.1 porque é positivo.
+--
+-- 6.5 voltou vazia: nenhuma entrada negativa. Os valores das entradas
+-- (1.833 e 3.900) são consistentes entre si e com as parcelas, então
+-- são elas que estão certas.
+--
+-- ⚠️ POR ISSO O UPDATE ABAIXO NÃO É SUFICIENTE, e nada aqui deve ser
+-- rodado antes da Fer decidir. São três cenários possíveis:
+--   (a) foram retiradas PARCIAIS de propósito em 2023 → só o sinal está
+--       errado nos ids 24 e 27, e o id 41 está correto;
+--   (b) são erros de digitação → os três deveriam ser iguais às entradas
+--       (1.833, 3.900 e 3.900);
+--   (c) mistura das duas.
+-- Só quem lançou sabe. O impacto no caixa é diferente em cada cenário.
+-- ───────────────────────────────────────────────────────────────
+
+-- 6.5b Todos os espelhos [TD] cujo valor NÃO bate com uma entrada PF
+--      paga de mesma data — a lista completa do problema, para a Fer
+--      revisar de uma vez em vez de descobrir aos poucos.
+select s.id, s.data_pagamento, s.descricao, s.valor as valor_espelho,
+       (select string_agg(e.valor::text, ' + ')
+        from entradas e
+        where e.conta = 'pessoal' and e.status = 'Pago'
+          and e.data_pagamento = s.data_pagamento) as entradas_pf_do_dia
+from saidas s
+where s.descricao ~* '^(\[TD\]|TD )'
+  and s.status = 'Pago'
+  and not exists (
+    select 1 from entradas e
+    where e.conta = 'pessoal' and e.status = 'Pago'
+      and e.data_pagamento = s.data_pagamento
+      and abs(e.valor - s.valor) < 0.01
+  )
+order by s.data_pagamento;
+
+-- ═══════════════════════════════════════════════════════════════
+-- 6.6 CORREÇÃO — NÃO RODE ainda. Escolha o cenário com a Fer primeiro.
+--     Os dois blocos estão comentados de propósito.
+--
+--     ⚠️ Qualquer um deles FAZ O CAIXA CAIR. Avise antes, senão a queda
+--     no saldo vai parecer um problema novo.
 -- ═══════════════════════════════════════════════════════════════
 
+-- CENÁRIO (a) — foram retiradas parciais; só o sinal está errado.
+--   Efeito: caixa cai R$ 7.674,00.
 -- update saidas set valor = abs(valor) where id in (24, 27) and valor < 0;
 
--- Conferência depois de rodar (esperado: 167.00 e 3670.00, positivos):
--- select id, data_pagamento, descricao, valor from saidas where id in (24,27);
+-- CENÁRIO (b) — foram erros de digitação; o espelho deve igualar a entrada.
+--   Efeito: caixa cai R$ 7.674,00 (sinal) + R$ 5.548,00 (diferenças) =
+--           R$ 13.222,00 no total.
+--   Confira os valores na tabela do comentário acima antes de rodar.
+-- update saidas set valor = 1833.00 where id = 24;  -- espelha entrada 20
+-- update saidas set valor = 3900.00 where id = 27;  -- espelha entrada 24
+-- update saidas set valor = 3900.00 where id = 41;  -- espelha entrada 28
+
+-- Conferência depois de rodar (nenhum valor negativo, valores esperados):
+-- select id, data_pagamento, descricao, valor from saidas where id in (24,27,41);

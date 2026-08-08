@@ -181,12 +181,20 @@ function calcFluxoMesAtual(){
 //
 // As guardas de truthy são essenciais: sem elas, null===null e ''==='' fariam
 // lançamentos avulsos serem atribuídos a contratos ao acaso.
+// Placeholders como '-' aparecem em registros de 2023 na coluna `projeto`;
+// são truthy, mas não identificam contrato nenhum — tratá-los como vazio evita
+// que todos eles casem entre si.
+const nomeUtil = v => {
+  const s = String(v==null?'':v).trim()
+  return /^[-—–.\s]*$/.test(s) ? '' : s
+}
 function doContrato(reg, p){
   if(!reg || !p) return false
   if(reg.contrato_id != null) return reg.contrato_id === p.id
-  const nomes = [p.nome_contrato, p.projeto].filter(Boolean)
+  const nomes = [nomeUtil(p.nome_contrato), nomeUtil(p.projeto)].filter(Boolean)
   if(!nomes.length) return false
-  return nomes.includes(reg.nome_contrato) || nomes.includes(reg.projeto)
+  const rNome = nomeUtil(reg.nome_contrato), rProj = nomeUtil(reg.projeto)
+  return (!!rNome && nomes.includes(rNome)) || (!!rProj && nomes.includes(rProj))
 }
 
 // "A receber" de um contrato = soma das parcelas (entradas) pendentes daquele contrato.

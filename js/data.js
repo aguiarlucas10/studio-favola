@@ -2,7 +2,7 @@
 // ═══════════════════════════════════════════════
 // DATA
 // ═══════════════════════════════════════════════
-let P=[], E=[], S=[], R=[], F=[], C=[]  // C = contas bancárias
+let P=[], E=[], S=[], R=[], C=[]  // C = contas bancárias
 let currentUserId = null, currentUserName = ''
 
 async function initApp(){
@@ -21,16 +21,36 @@ async function initApp(){
   renderDashboard()
 }
 
+// Busca TODAS as linhas de uma tabela, paginando de 1000 em 1000 (teto por
+// requisição do Supabase). Substitui os antigos limit(500)/limit(800): como a
+// ordenação é por data desc, as parcelas futuras vinham primeiro e empurravam
+// o histórico antigo para fora da janela — o saldo acumulado ficava errado.
+// Ordena também por id para paginação estável em datas empatadas/nulas.
+async function fetchAll(tabela, orderCol){
+  const out = []
+  for(let de=0;;de+=1000){
+    const {data, error} = await db.from(tabela).select('*')
+      .order(orderCol,{ascending:false}).order('id',{ascending:false})
+      .range(de, de+999)
+    if(error) return {data:out, error}
+    out.push(...(data||[]))
+    if(!data || data.length < 1000) return {data:out, error:null}
+  }
+}
+
 async function loadData(){
-  const [p,e,s,r,f,c] = await Promise.all([
+  const [p,e,s,r,c] = await Promise.all([
     db.from('contratos').select('*').order('id',{ascending:false}),
-    db.from('entradas').select('*').order('data_pagamento',{ascending:false}).limit(500),
-    db.from('saidas').select('*').order('data_pagamento',{ascending:false}).limit(800),
+    fetchAll('entradas','data_pagamento'),
+    fetchAll('saidas','data_pagamento'),
     db.from('rt_comissoes').select('*').order('data_fechamento',{ascending:false}),
-    db.from('fluxo_caixa').select('*').order('mes_ano',{ascending:false}).limit(60),
     db.from('contas_bancarias').select('*').order('nome',{ascending:true}),
   ])
-  P=p.data||[]; E=e.data||[]; S=s.data||[]; R=r.data||[]; F=f.data||[]; C=c.data||[]
+  // Falha em qualquer consulta precisa ser VISÍVEL: renderizar os números
+  // sobre um array vazio faria o caixa parecer zerado e induziria a erro.
+  const falha = [p,e,s,r,c].find(x=>x.error)
+  if(falha) toast(friendlyError(falha.error), 'error', 8000)
+  P=p.data||[]; E=e.data||[]; S=s.data||[]; R=r.data||[]; C=c.data||[]
   normalizaArrays()
 }
 

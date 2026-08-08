@@ -4,7 +4,8 @@
 let AJ = []  // ajustes pendentes carregados
 
 async function loadAjustes(){
-  const { data } = await db.from('ajustes_caixa').select('*').order('created_at',{ascending:false}).limit(20)
+  const { data, error } = await db.from('ajustes_caixa').select('*').order('created_at',{ascending:false}).limit(20)
+  if(error) toast(friendlyError(error), 'error', 6000)
   AJ = data || []
 }
 

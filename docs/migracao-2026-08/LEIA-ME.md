@@ -2,18 +2,18 @@
 
 ## ✅ Estado em 08/08/2026
 
-Diagnóstico concluído (0.5 conferida, 0.7/0.8/0.10/0.11/0.12 reportadas).
+Diagnóstico concluído: 0.5 e 0.9 conferidas ✅, 0.7/0.8/0.10/0.11/0.12 reportadas.
 Falta rodar, nesta ordem:
 
-- [ ] **0.9** (última consulta do diagnóstico) — as duas sócias aparecem? → libera o passo 02
-- [ ] **Passo 02** — allowlist (só depois da 0.9)
+- [ ] **Passo 01** — colunas de `ajustes_caixa`
+- [ ] **Passo 02** — allowlist
 - [ ] **Passo 03** — trigger de dupla aprovação
-- [ ] **Passo 04** — backfill (0.5 já conferida ✅)
+- [ ] **Passo 04** — backfill do a receber legado
 - [ ] **Passo 05** — RPC `aprovar_ajuste` (**obrigatório**: sem ele o app não aprova ajuste)
 - [ ] **Painel** — Authentication → Sign In / Providers → desativar "Allow new users to sign up"
 - [ ] **Conferir no app** com a Fer antes do push
 
-Passo 01: já aplicado em produção. Passo 04b: **pular** (0.8 voltou vazia).
+Passo 04b: **pular** (0.8 voltou vazia — não há `mes_ano` inválido).
 
 
 Mesma migração de `docs/migracao-2026-08.sql`, separada em arquivos para rodar
@@ -24,7 +24,7 @@ colar o conteúdo do arquivo → Run).
 | Ordem | Arquivo | O que faz | Atenção |
 |---|---|---|---|
 | 1º | `00-diagnostico.sql` | Só leitura (SELECTs) | **Rode cada consulta separadamente** (selecione o bloco e Run) — rodando tudo junto só o último resultado aparece. Guarde/print os resultados. |
-| 2º | `01-ajustes-caixa-colunas.sql` | Colunas de identidade em `ajustes_caixa` | Já aplicado em produção (o diagnóstico 0.11 mostrou o trigger antigo ativo). Rodar de novo não faz mal — é idempotente. |
+| 2º | `01-ajustes-caixa-colunas.sql` | Colunas de identidade em `ajustes_caixa` | **Rode.** O trigger antigo estar ativo (0.11) não prova que as colunas existem — o PL/pgSQL só resolve `new.<coluna>` em tempo de execução. É `add column if not exists`: sem efeito se já existirem. |
 | 3º | `02-allowlist-rls.sql` | Só quem está em `usuarios` acessa os dados | **Antes**: confira no resultado do diagnóstico (consulta 0.9) que as DUAS sócias aparecem em `usuarios` — senão vocês mesmas perdem acesso. |
 | 4º | `03-trigger-dupla-aprovacao.sql` | Blindagem da dupla aprovação no banco | Seguro; substitui o trigger antigo. |
 | 5º | `04-backfill-a-receber.sql` | Cria as parcelas do saldo legado | **Só depois** de conferir com a Fer a lista da consulta 0.5 do diagnóstico. Reversível (instrução no arquivo). |

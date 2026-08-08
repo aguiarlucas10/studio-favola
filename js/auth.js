@@ -12,10 +12,16 @@ async function doLogin() {
 }
 async function doLogout(){
   await db.auth.signOut()
-  document.getElementById('app').style.display='none'
-  document.getElementById('login-screen').style.display='flex'
+  // Recarrega para limpar TUDO: arrays globais (P,E,S,R,C,AJ), usuário e o DOM
+  // renderizado — sem isso os dados financeiros ficavam recuperáveis no DevTools
+  location.reload()
 }
 async function checkSession(){
   const {data:{session}} = await db.auth.getSession()
   if(session) initApp()
 }
+// Sessão encerrada/expirada em qualquer momento → volta à tela de login.
+// Guarda em currentUserId evita loop de reload na própria tela de login.
+db.auth.onAuthStateChange(event => {
+  if(event === 'SIGNED_OUT' && currentUserId) location.reload()
+})

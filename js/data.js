@@ -9,6 +9,7 @@ async function initApp(){
   document.getElementById('login-screen').style.display='none'
   document.getElementById('app').style.display='block'
   const {data:{user}} = await db.auth.getUser()
+  if(!user){ location.reload(); return }  // token revogado entre o check e aqui
   const {data:u} = await db.from('usuarios').select('nome').eq('id',user.id).single()
   currentUserId = user.id
   currentUserName = u?.nome||user.email.split('@')[0]

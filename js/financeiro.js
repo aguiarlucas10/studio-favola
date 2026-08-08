@@ -23,11 +23,17 @@ function filterFin(f,btn){
   else renderFinanceiro()
 }
 
-function toggleFinGrupo(encoded){
-  const key = decodeURIComponent(encoded)
+// Expansão dos grupos de parcelas por event delegation com data-attribute.
+// (Antes era onclick inline com o nome do contrato interpolado em contexto JS
+// — encodeURIComponent não escapa aspas simples, um nome malicioso executava
+// código. Como atributo HTML escapado por esc(), o dado é inerte.)
+document.getElementById('fin-entradas-wrap')?.addEventListener('click', ev => {
+  const tr = ev.target.closest('tr[data-grupo]')
+  if(!tr || ev.target.closest('input,button')) return
+  const key = tr.dataset.grupo
   if(finExpandido.has(key)) finExpandido.delete(key); else finExpandido.add(key)
   renderFinanceiro()
-}
+})
 function toggleFinEspelhos(){
   finEspelhosVisiveis = !finEspelhosVisiveis
   renderFinanceiro()
@@ -81,7 +87,7 @@ function tabelaAReceber(rows){
       const somaG = itens.reduce((a,e)=>a+(e.valor||0),0)
       const prox = itens.map(e=>e.data_pagamento).filter(Boolean).sort()[0]
       const aberto = finExpandido.has(key)
-      body += `<tr style="background:var(--bg);cursor:pointer" onclick="toggleFinGrupo('${encodeURIComponent(key)}')">
+      body += `<tr style="background:var(--bg);cursor:pointer" data-grupo="${esc(key)}">
         <td style="text-align:center;color:var(--warm-gray)">${aberto?'▾':'▸'}</td>
         <td class="td-muted">próx: ${fmtD(prox)}</td>
         <td class="td-bold">${esc(itens[0].nome_contrato)}</td>

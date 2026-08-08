@@ -106,7 +106,10 @@ function mProjeto(d=null){
     ${fld('M²','<input id="m-m2">')}
   </div>
   ${fld('Observações','<textarea id="m-obs" rows="2"></textarea>',true)}
-  ${d ? '' : `
+  ${d ? `
+  <div style="margin-top:14px;padding:10px 14px;background:var(--cool-gray);border-radius:3px;font-size:10px;color:var(--warm-gray);line-height:1.6">
+    Alterar valor ou nº de parcelas aqui <strong>não altera as parcelas já geradas</strong> — edite as entradas do contrato na aba Financeiro.
+  </div>` : `
   <div class="modal-divider" style="margin-top:18px"></div>
   <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--preto-soft);margin-bottom:8px;cursor:pointer">
     <input type="checkbox" id="m-gerar-parc" checked onchange="toggleParcelasPreview()"> Gerar parcelas previstas (uma entrada "A Receber" por mês)
@@ -134,7 +137,12 @@ function gerarParcelasPreview(){
   const linhas = []
   const [y,m,dia] = inicio.split('-').map(Number)
   for(let i=0;i<n;i++){
-    const dt = new Date(y, (m-1)+i, dia||1)
+    // Avança i meses e depois aplica o dia com clamp no último dia do mês:
+    // sem isso, início dia 29-31 estoura o mês (31/01 + 1 mês viraria 03/03),
+    // pulando meses e duplicando parcelas no mesmo mês.
+    const alvo = new Date(y, (m-1)+i, 1)
+    const ult = new Date(alvo.getFullYear(), alvo.getMonth()+1, 0).getDate()
+    const dt = new Date(alvo.getFullYear(), alvo.getMonth(), Math.min(dia||1, ult))
     const iso = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`
     const v = i===n-1 ? +(valor-base*(n-1)).toFixed(2) : base
     linhas.push({iso, v})
@@ -273,29 +281,43 @@ async function saveProjeto(id){
   }
   // Coleta parcelas ANTES de fechar o modal (só em contrato novo)
   const parcelas = id ? [] : coletarParcelas()
+  const conta = g('m-conta')
 
-  let novoContrato = null, error
-  if(id){
-    ({error} = await db.from('contratos').update(payload).eq('id',id))
-  } else {
-    const r = await db.from('contratos').insert(payload).select().single()
-    error = r.error; novoContrato = r.data
+  const executa = async ()=>{
+    let novoContrato = null, error
+    if(id){
+      ({error} = await db.from('contratos').update(payload).eq('id',id))
+    } else {
+      const r = await db.from('contratos').insert(payload).select().single()
+      error = r.error; novoContrato = r.data
+    }
+    if(error){ toast(friendlyError(error), 'error', 6000); return }
+
+    // Gera as parcelas previstas como entradas "A Receber" do contrato recém-criado
+    if(novoContrato && parcelas.length){
+      const rows = parcelas.map(p=>({
+        contrato_id: novoContrato.id, nome_contrato: nome, cliente,
+        tipo_entrada: 'projeto', valor: p.valor, data_pagamento: p.data,
+        conta, status: 'A Receber', mes_ano: mesAnoDeData(p.data)
+      }))
+      const {error:eParc} = await db.from('entradas').insert(rows)
+      if(eParc){ toast('Contrato salvo, mas falhou ao gerar as parcelas: '+friendlyError(eParc), 'error', 7000) }
+    }
+
+    closeModal(); await loadData(); renderProjetos()
   }
-  if(error){ toast(friendlyError(error), 'error', 6000); return }
 
-  // Gera as parcelas previstas como entradas "A Receber" do contrato recém-criado
-  if(novoContrato && parcelas.length){
-    const conta = g('m-conta')
-    const rows = parcelas.map(p=>({
-      contrato_id: novoContrato.id, nome_contrato: nome, cliente,
-      tipo_entrada: 'projeto', valor: p.valor, data_pagamento: p.data,
-      conta, status: 'A Receber', mes_ano: mesAnoDeData(p.data)
-    }))
-    const {error:eParc} = await db.from('entradas').insert(rows)
-    if(eParc){ toast('Contrato salvo, mas falhou ao gerar as parcelas: '+friendlyError(eParc), 'error', 7000) }
+  // Parcelas editadas à mão podem divergir do valor do contrato — confirmar antes
+  const somaParcelas = parcelas.reduce((a,p)=>a+(p.valor||0),0)
+  if(parcelas.length && Math.abs(somaParcelas - (payload.valor_contrato||0)) > 0.01){
+    confirmDialog(
+      'Soma das parcelas difere do contrato',
+      `As parcelas somam ${fmt(somaParcelas)}, mas o contrato vale ${fmt(payload.valor_contrato)}. Salvar assim mesmo?`,
+      executa
+    )
+    return
   }
-
-  closeModal(); await loadData(); renderProjetos()
+  await executa()
 }
 
 async function saveEntrada(id){

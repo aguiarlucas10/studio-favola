@@ -61,7 +61,7 @@ Tabelas: `usuarios`, `contratos`, `entradas`, `saidas`, `rt_comissoes`, `fluxo_c
 
 **RLS**: todas as tabelas exigem usuário autenticado **e presente na tabela `usuarios`** (allowlist via política restritiva — ver `docs/migracao-2026-08.sql`, Seção 2). A chave `anon` exposta no `js/config.js` é pública por design do Supabase; a segurança vem das políticas RLS. Mantenha o *signup público desabilitado* no painel (Authentication → Sign In / Providers).
 
-**Migração pendente ao publicar esta versão**: executar `docs/migracao-2026-08.sql` no SQL Editor do Supabase, seção por seção (diagnóstico, colunas de `ajustes_caixa`, allowlist, trigger de dupla aprovação, backfill do a receber legado, correção de `mes_ano` de CSVs antigos e a RPC `aprovar_ajuste`). **Sem a Seção 5 (RPC), aprovar ajuste de caixa retorna erro** — o app passou a aprovar via `db.rpc('aprovar_ajuste')` para a operação ser atômica.
+**Migração pendente ao publicar esta versão**: rodar os passos de [docs/migracao-2026-08/](docs/migracao-2026-08/) no SQL Editor do Supabase, **um de cada vez e na ordem** — comece pelo `LEIA-ME.md` (diagnóstico, colunas de `ajustes_caixa`, allowlist, trigger de dupla aprovação, backfill do a receber legado, correção de `mes_ano` de CSVs antigos e a RPC `aprovar_ajuste`). **Sem o passo 05 (RPC), aprovar ajuste de caixa retorna erro** — o app passou a aprovar via `db.rpc('aprovar_ajuste')` para a operação ser atômica.
 
 ## Deploy
 

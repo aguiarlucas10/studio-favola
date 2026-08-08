@@ -1,5 +1,21 @@
 # Migração 2026-08 — passo a passo
 
+## ✅ Estado em 08/08/2026
+
+Diagnóstico concluído (0.5 conferida, 0.7/0.8/0.10/0.11/0.12 reportadas).
+Falta rodar, nesta ordem:
+
+- [ ] **0.9** (última consulta do diagnóstico) — as duas sócias aparecem? → libera o passo 02
+- [ ] **Passo 02** — allowlist (só depois da 0.9)
+- [ ] **Passo 03** — trigger de dupla aprovação
+- [ ] **Passo 04** — backfill (0.5 já conferida ✅)
+- [ ] **Passo 05** — RPC `aprovar_ajuste` (**obrigatório**: sem ele o app não aprova ajuste)
+- [ ] **Painel** — Authentication → Sign In / Providers → desativar "Allow new users to sign up"
+- [ ] **Conferir no app** com a Fer antes do push
+
+Passo 01: já aplicado em produção. Passo 04b: **pular** (0.8 voltou vazia).
+
+
 Mesma migração de `docs/migracao-2026-08.sql`, separada em arquivos para rodar
 **um de cada vez**, na ordem, no SQL Editor do Supabase
 (Dashboard → projeto `cvymqbjaxtricwimusld` → SQL Editor → New query →

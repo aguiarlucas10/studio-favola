@@ -2,34 +2,76 @@
 // ═══════════════════════════════════════════════
 // DATA
 // ═══════════════════════════════════════════════
-let P=[], E=[], S=[], R=[], F=[], C=[]  // C = contas bancárias
+let P=[], E=[], S=[], R=[], C=[]  // C = contas bancárias
 let currentUserId = null, currentUserName = ''
 
 async function initApp(){
   document.getElementById('login-screen').style.display='none'
   document.getElementById('app').style.display='block'
-  const {data:{user}} = await db.auth.getUser()
+  // getSession() (checkSession) lê do localStorage sem rede; getUser() vai à
+  // rede. Recarregar quando getUser falha por conexão entraria em loop infinito
+  // de reload — por isso a falha vira aviso e volta ao login, sem recarregar.
+  const {data:{user}, error:errUser} = await db.auth.getUser()
+  if(errUser || !user){
+    toast('Não foi possível confirmar seu login. Verifique a conexão e recarregue a página.', 'error', 9000)
+    document.getElementById('app').style.display='none'
+    document.getElementById('login-screen').style.display='flex'
+    return
+  }
   const {data:u} = await db.from('usuarios').select('nome').eq('id',user.id).single()
   currentUserId = user.id
   currentUserName = u?.nome||user.email.split('@')[0]
   document.getElementById('user-name').textContent = currentUserName
   document.getElementById('dash-month').textContent = new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'})
-  document.getElementById('socias-month').textContent = mesAtual()
+  document.getElementById('socias-month').textContent = mesAnoLabel(mesAtual())
   await loadData()
   await loadAjustes()
   renderDashboard()
 }
 
+// Busca TODAS as linhas de uma tabela, paginando de 1000 em 1000 (teto por
+// requisição do Supabase). Substitui os antigos limit(500)/limit(800): como a
+// ordenação é por data desc, as parcelas futuras vinham primeiro e empurravam
+// o histórico antigo para fora da janela — o saldo acumulado ficava errado.
+// Ordena também por id para paginação estável em datas empatadas/nulas.
+// Avança pelo número de linhas REALMENTE recebidas e só para quando a página
+// vem vazia. Parar em "recebeu menos de 1000" quebraria silenciosamente se o
+// projeto tivesse db-max-rows menor que isso — voltaríamos ao bug do histórico
+// truncado, agora sem nenhum .limit() visível para dar a pista.
+async function fetchAll(tabela, orderCol){
+  const out = []
+  let de = 0
+  for(;;){
+    const {data, error} = await db.from(tabela).select('*')
+      .order(orderCol,{ascending:false}).order('id',{ascending:false})
+      .range(de, de+999)
+    if(error) return {data:out, error}
+    const n = data?.length || 0
+    if(!n) return {data:out, error:null}
+    out.push(...data)
+    de += n
+  }
+}
+
 async function loadData(){
-  const [p,e,s,r,f,c] = await Promise.all([
-    db.from('contratos').select('*').order('id',{ascending:false}),
-    db.from('entradas').select('*').order('data_pagamento',{ascending:false}).limit(500),
-    db.from('saidas').select('*').order('data_pagamento',{ascending:false}).limit(800),
-    db.from('rt_comissoes').select('*').order('data_fechamento',{ascending:false}),
-    db.from('fluxo_caixa').select('*').order('mes_ano',{ascending:false}).limit(60),
+  const [p,e,s,r,c] = await Promise.all([
+    fetchAll('contratos','id'),
+    fetchAll('entradas','data_pagamento'),
+    fetchAll('saidas','data_pagamento'),
+    fetchAll('rt_comissoes','data_fechamento'),
     db.from('contas_bancarias').select('*').order('nome',{ascending:true}),
   ])
-  P=p.data||[]; E=e.data||[]; S=s.data||[]; R=r.data||[]; F=f.data||[]; C=c.data||[]
+  // Uma consulta que falha no meio da paginação devolve dados PARCIAIS. Exibir
+  // números sobre metade do histórico é pior que exibir nada: um caixa zerado
+  // é obviamente suspeito, um caixa 40% menor parece correto. Por isso a
+  // atribuição é por consulta — quem falhou mantém o que já estava carregado.
+  const falha = [p,e,s,r,c].find(x=>x.error)
+  if(falha) toast(friendlyError(falha.error)+' Os números podem estar incompletos — recarregue a página.', 'error', 10000)
+  if(!p.error) P=p.data||[]
+  if(!e.error) E=e.data||[]
+  if(!s.error) S=s.data||[]
+  if(!r.error) R=r.data||[]
+  if(!c.error) C=c.data||[]
   normalizaArrays()
 }
 
@@ -83,10 +125,30 @@ function normalizaMesAno(v){
   return s
 }
 
-// Garante que todos os registros em memória tenham mes_ano normalizado
+// Garante que todos os registros em memória tenham mes_ano normalizado (MM/YYYY),
+// guardando o valor ORIGINAL do banco em _mesAnoBanco — é ele que deve ser
+// regravado quando um registro sem data_pagamento é editado, senão o lançamento
+// pularia para o mês corrente. Não-enumerável de propósito: assim não vaza em
+// spread/Object.entries (ex.: no payload de duplicação).
+function guardaOriginal(r){
+  Object.defineProperty(r, '_mesAnoBanco', {value: r.mes_ano, enumerable: false, configurable: true, writable: true})
+  r.mes_ano = normalizaMesAno(r.mes_ano)
+}
 function normalizaArrays(){
-  E.forEach(e=>{ e.mes_ano=normalizaMesAno(e.mes_ano) })
-  S.forEach(s=>{ s.mes_ano=normalizaMesAno(s.mes_ano) })
+  E.forEach(guardaOriginal)
+  S.forEach(guardaOriginal)
+}
+
+// mes_ano a gravar no banco ao salvar um lançamento.
+// Com data de pagamento, deriva dela. SEM data (registros legados e importados
+// costumam ter data nula), PRESERVA o mês original — recalcular jogaria um
+// lançamento de 2023 no mês corrente só porque alguém corrigiu a descrição.
+// Só cai no mês atual quando é registro novo mesmo.
+function mesAnoAoSalvar(data, anterior){
+  if(data) return mesAnoDeData(data)
+  if(anterior && anterior._mesAnoBanco) return anterior._mesAnoBanco
+  if(anterior && anterior.mes_ano) return anterior.mes_ano
+  return mesAnoDeData(null)
 }
 
 function calcFluxoMeses(nMeses=6){
@@ -107,6 +169,46 @@ function calcFluxoMesAtual(){
   const entradas = E.filter(e=>e.mes_ano===mes && e.status==='Pago').reduce((a,e)=>a+(e.valor||0),0)
   const saidas   = S.filter(s=>s.mes_ano===mes && s.status==='Pago').reduce((a,s)=>a+(s.valor||0),0)
   return {entradas, saidas}
+}
+
+// Um lançamento (entrada/saída) pertence a este contrato?
+//
+// contrato_id é o vínculo canônico e tem precedência. Sem ele, casa por texto
+// usando nome_contrato OU a coluna legada `projeto` — que está preenchida em
+// ~99% do histórico (236/238 entradas, 370/389 saídas em ago/2026) e nunca é
+// gravada pelo app atual. Ignorar `projeto` perderia o vínculo de quase todo
+// o histórico; por isso as duas colunas contam dos dois lados.
+//
+// As guardas de truthy são essenciais: sem elas, null===null e ''==='' fariam
+// lançamentos avulsos serem atribuídos a contratos ao acaso.
+// Placeholders como '-' aparecem em registros de 2023 na coluna `projeto`;
+// são truthy, mas não identificam contrato nenhum — tratá-los como vazio evita
+// que todos eles casem entre si.
+const nomeUtil = v => {
+  const s = String(v==null?'':v).trim()
+  return /^[-—–.\s]*$/.test(s) ? '' : s
+}
+function doContrato(reg, p){
+  if(!reg || !p) return false
+  if(reg.contrato_id != null) return reg.contrato_id === p.id
+  const nomes = [nomeUtil(p.nome_contrato), nomeUtil(p.projeto)].filter(Boolean)
+  if(!nomes.length) return false
+  const rNome = nomeUtil(reg.nome_contrato), rProj = nomeUtil(reg.projeto)
+  return (!!rNome && nomes.includes(rNome)) || (!!rProj && nomes.includes(rProj))
+}
+
+// "A receber" de um contrato = soma das parcelas (entradas) pendentes daquele contrato.
+// Fonte única da verdade: em vez do campo a_receber digitado à mão, soma as entradas
+// não pagas vinculadas ao contrato. Exclui RT (contabilizada em rt_comissoes).
+// A coluna contratos.a_receber é LEGADA: os saldos antigos viraram entradas
+// '[Backfill saldo legado]' via docs/migracao-2026-08/04-backfill-a-receber.sql.
+function contratoAReceber(p){
+  if(!p) return 0
+  return E.filter(e =>
+      doContrato(e, p)
+      && e.status!=='Pago'
+      && (e.tipo_entrada||'').toLowerCase()!=='rt')
+    .reduce((a,e)=>a+(e.valor||0),0)
 }
 
 // Calcula saldo acumulado total de todos os registros pagos

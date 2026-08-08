@@ -55,13 +55,18 @@ async function bulkUpdateStatus(){
   const newStatus = document.getElementById('bulk-status-val').value
   if(!sel.length || !newStatus) return
   const tables = [...new Set(sel.map(s=>s.table))]
+  // Entradas PF quitadas em massa precisam ganhar a saída-espelho [TD]
+  const quitadasPF = newStatus==='Pago'
+    ? sel.filter(s=>s.table==='entradas')
+        .map(s=>E.find(e=>e.id===s.id))
+        .filter(e=>e && e.status!=='Pago' && (e.conta==='pessoal'||e.conta==='PF'))
+    : []
   for(const tbl of tables){
     const ids = sel.filter(s=>s.table===tbl).map(s=>s.id)
-    // Detect the correct status field per table
-    const field = tbl==='contratos' ? 'status' : tbl==='rt_comissoes' ? 'status' : 'status'
-    const {error} = await db.from(tbl).update({[field]:newStatus}).in('id',ids)
+    const {error} = await db.from(tbl).update({status:newStatus}).in('id',ids)
     if(error){ toast(friendlyError(error), 'error', 6000); return }
   }
+  for(const e of quitadasPF) await garanteEspelhoTD(e)
   clearSelection()
   await loadData()
   tables.forEach(tbl=>reRender[tbl]?.())
@@ -72,19 +77,37 @@ async function bulkDuplicate(){
   if(!sel.length) return
   const tables = [...new Set(sel.map(s=>s.table))]
 
-  // Campos que NÃO devem ser copiados (gerados pelo banco)
-  const omit = ['id','created_at']
-  const strip = obj => Object.fromEntries(Object.entries(obj).filter(([k])=>!omit.includes(k)))
+  // Campos que NÃO podem ser copiados numa duplicação:
+  // - id e timestamps: gerados pelo banco
+  // - entradas.is_retirada_automatica: coluna GENERATED ALWAYS — o Postgres
+  //   rejeita o INSERT inteiro se ela vier no payload (era a causa do
+  //   "Duplicar" falhar em entradas)
+  // - contratos.numero: UNIQUE — a cópia colidiria com o original
+  const omitComum = ['id','created_at','updated_at']
+  const omitPorTabela = { entradas:['is_retirada_automatica'], contratos:['numero'] }
+  const strip = (obj, tbl) => {
+    const omit = [...omitComum, ...(omitPorTabela[tbl]||[])]
+    // `_`-prefixados são campos internos do app (ex: _mesAnoBanco), não colunas
+    const out = Object.fromEntries(Object.entries(obj).filter(([k])=>!omit.includes(k) && !k.startsWith('_')))
+    // mes_ano em memória está normalizado (MM/YYYY); o banco usa o legado
+    // 01/MM/YYYY. Copiar o valor da memória gravaria o formato errado.
+    if('mes_ano' in out) out.mes_ano = mesAnoAoSalvar(obj.data_pagamento, obj)
+    return out
+  }
 
   let total = 0
   for(const tbl of tables){
     const ids = sel.filter(s=>s.table===tbl).map(s=>s.id)
     // Busca os registros originais localmente (já carregados)
     const fonte = { contratos:P, entradas:E, saidas:S, rt_comissoes:R }[tbl] || []
-    const registros = ids.map(id=>fonte.find(r=>r.id===id)).filter(Boolean).map(strip)
+    const registros = ids.map(id=>fonte.find(r=>r.id===id)).filter(Boolean).map(r=>strip(r,tbl))
     if(!registros.length) continue
     const {error} = await db.from(tbl).insert(registros)
-    if(error){ toast(friendlyError(error), 'error', 6000); return }
+    if(error){
+      console.error(`[Duplicar ${tbl}] payload que falhou:`, registros)
+      toast(friendlyError(error), 'error', 8000)
+      return
+    }
     total += registros.length
   }
 
@@ -92,5 +115,6 @@ async function bulkDuplicate(){
   await loadData()
   tables.forEach(tbl=>reRender[tbl]?.())
 
-  toast(`⧉ ${total} registro${total>1?'s':''} duplicado${total>1?'s':''}`, 'info', 3500)
+  const aviso = tables.includes('contratos') ? ' · preencha o nº do novo contrato' : ''
+  toast(`⧉ ${total} registro${total>1?'s':''} duplicado${total>1?'s':''}${aviso}`, 'info', 4500)
 }

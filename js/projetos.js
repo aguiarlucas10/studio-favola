@@ -30,7 +30,7 @@ function renderProjetos(){
       <td style="color:var(--preto-soft);max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(p.cliente)}">${esc(p.cliente)}</td>
       <td>${badge(p.servico||'—')}</td>
       <td class="td-money">${fmt(p.valor_contrato)}</td>
-      <td class="td-money td-amber">${fmt(p.a_receber||0)}</td>
+      <td class="td-money td-amber">${fmt(contratoAReceber(p))}</td>
       <td>${contaBadge(p.conta)}</td>
       <td>${badge(p.status)}</td>
       <td class="td-muted">${esc(p.cidade||'')}${p.uf?'/'+esc(p.uf):''}</td>
@@ -53,8 +53,18 @@ function renderResultado(){
 
   // Por projeto: entradas + RT recebidas - saídas diretas - rateio geral
   const resultado = P.map(p => {
-    const entradas = E.filter(e=>e.contrato_id===p.id||e.nome_contrato===p.nome_contrato).reduce((a,e)=>a+(e.valor||0),0)
-    const rtRecebida = R.filter(r=>(r.projeto===p.nome_contrato||r.projeto===p.projeto)&&r.status==='Pago').reduce((a,r)=>a+(r.valor_rt||0),0)
+    // Receita REALIZADA: só entradas pagas (parcela futura não é resultado)
+    const entradas = E.filter(e=>doContrato(e,p) && e.status==='Pago').reduce((a,e)=>a+(e.valor||0),0)
+    // RT casa por texto (o app grava rt_comissoes.projeto, nunca contrato_id).
+    // Guardas de truthy impedem null===null de atribuir RT ao projeto errado.
+    const rtRecebida = R.filter(r=>!!r.projeto && r.status==='Pago'
+      && (r.projeto===p.nome_contrato || (!!p.projeto && r.projeto===p.projeto))
+    ).reduce((a,r)=>a+(r.valor_rt||0),0)
+    // Saída direta = vinculada por contrato_id, e SÓ por ele — de propósito.
+    // Usar `projeto` aqui reclassificaria centenas de saídas legadas de
+    // "geral rateada" para "direta", mudando o rateio e o resultado de todos
+    // os projetos de uma vez. É uma decisão de negócio para tomar com as
+    // sócias, não um efeito colateral de correção de bug.
     const saidasDiretas = S.filter(s=>s.contrato_id===p.id && tiposOperacionais.includes(s.tipo_saida) && s.status==='Pago').reduce((a,s)=>a+(s.valor||0),0)
     const rateio = p.status==='Ativo' ? rateioUnitario : 0
     const receita = entradas + rtRecebida
@@ -129,7 +139,7 @@ function showProjetoDrawer(id){
     <div class="drawer-row"><span class="drawer-lbl">Serviço</span><span class="drawer-val">${esc(p.servico||'—')}</span></div>
     <div class="drawer-row"><span class="drawer-lbl">Valor do Contrato</span><span class="drawer-val">${fmt(p.valor_contrato)}</span></div>
     <div class="drawer-row"><span class="drawer-lbl">Parcelas</span><span class="drawer-val">${p.parcelas||1}x</span></div>
-    <div class="drawer-row"><span class="drawer-lbl">A Receber</span><span class="drawer-val" style="color:var(--amber)">${fmt(p.a_receber||0)}</span></div>
+    <div class="drawer-row"><span class="drawer-lbl">A Receber</span><span class="drawer-val" style="color:var(--amber)">${fmt(contratoAReceber(p))}</span></div>
     <div class="drawer-row"><span class="drawer-lbl">Conta</span><span class="drawer-val">${contaBadge(p.conta)}</span></div>
     <div class="drawer-row"><span class="drawer-lbl">Status</span><span class="drawer-val">${badge(p.status)}</span></div>
     <div class="drawer-row"><span class="drawer-lbl">Início</span><span class="drawer-val">${fmtD(p.data_inicio)}</span></div>

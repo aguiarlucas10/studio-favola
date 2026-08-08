@@ -118,7 +118,7 @@ function renderImportPreview(){
       <span style="font-size:11px;color:var(--warm-gray)">${csvRows.length} transações encontradas · <strong>${totalImportar} para importar</strong> · ${fmt(totalValor)}</span>
       <div style="display:flex;gap:8px">
         <button class="btn-secondary" onclick="csvIgnorarTodos()" style="font-size:10px;padding:6px 12px">Desmarcar todos</button>
-        <button class="btn-primary" onclick="importarCSV()" style="font-size:10px;padding:6px 14px">✓ Importar selecionados</button>
+        <button class="btn-primary" id="csv-import-btn" onclick="importarCSV()" style="font-size:10px;padding:6px 14px">✓ Importar selecionados</button>
       </div>
     </div>
     <div class="tbl-wrap" style="max-height:420px;overflow-y:auto">
@@ -154,7 +154,7 @@ function renderImportPreview(){
                 <option value="">Geral</option>${projOpts}
               </select>
             </td>
-            <td style="text-align:right;font-family:'Libre Baskerville',serif;font-size:12px;${corValor}">${sinal}${fmt(r.valor)}</td>
+            <td style="text-align:right;font-family:'Libre Baskerville',serif;font-size:12px;${corValor}">${sinal}${fmt(Math.abs(r.valor))}</td>
           </tr>`}).join('')}
       </tbody>
     </table></div>`
@@ -187,8 +187,7 @@ async function importarCSV(){
   let entradas=[], saidas=[]
 
   for(const r of paraImportar){
-    const [d,m,y] = r.data.split('-')
-    const mesAno = d&&m&&y ? `01/${m}/${y}` : mesAtual()
+    const mesAno = mesAnoDeData(r.data)
     const vinculo = r.vinculo || ''
     const [cid, cnome] = vinculo ? vinculo.split('|') : [null,null]
     const proj = cnome ? P.find(p=>p.nome_contrato===cnome) : null
@@ -204,7 +203,10 @@ async function importarCSV(){
     } else {
       saidas.push({
         tipo_saida: r.tipo, descricao:r.desc,
-        valor: r.valor, data_pagamento:r.data,
+        // Math.abs: no extrato do Nubank as saídas vêm negativas, e o app
+        // trata `saidas.valor` como grandeza positiva (calcSaldoAcumulado faz
+        // entradas − saídas). Gravar negativo faria a despesa AUMENTAR o caixa.
+        valor: Math.abs(r.valor), data_pagamento:r.data,
         conta: contaGlobal, status:'Pago', mes_ano:mesAno,
         contrato_id: cid?parseInt(cid):null,
         nome_contrato: cnome||null,
@@ -213,18 +215,18 @@ async function importarCSV(){
     }
   }
 
-  // Inserir em lotes
+  // Inserir em lotes — erro em um lote não pode ser silencioso: a sócia
+  // precisa saber O QUE falhou sem abrir o console
   let erros = 0
   if(entradas.length){
     const {error} = await db.from('entradas').insert(entradas)
-    if(error){ erros++; console.error('Entradas:', error.message) }
+    if(error){ erros++; toast('Falha ao importar as entradas: '+friendlyError(error), 'error', 8000) }
   }
   if(saidas.length){
     const {error} = await db.from('saidas').insert(saidas)
-    if(error){ erros++; console.error('Saídas:', error.message) }
+    if(error){ erros++; toast('Falha ao importar as saídas: '+friendlyError(error), 'error', 8000) }
   }
-
-  if(erros){ toast('Alguns registros não foram importados. Verifique o console do navegador para detalhes.', 'error', 6000); return }
+  if(erros) return
 
   const msg = `✓ Importados: ${entradas.length} entradas + ${saidas.length} saídas`
   closeImportCSV()
@@ -232,4 +234,5 @@ async function importarCSV(){
   renderFinanceiro()
   toast(msg, 'success')
 }
+importarCSV = travaDuplo(importarCSV, 'csv-import-btn')
 

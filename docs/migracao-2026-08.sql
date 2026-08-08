@@ -1,0 +1,18 @@
+-- ═══════════════════════════════════════════════════════════════
+-- Studio Favola — MIGRAÇÃO 2026-08
+--
+-- O conteúdo desta migração foi separado em passos individuais para
+-- rodar UM DE CADA VEZ no SQL Editor do Supabase, na ordem:
+--
+--   docs/migracao-2026-08/LEIA-ME.md                  ← comece por aqui
+--   docs/migracao-2026-08/00-diagnostico.sql          (só leitura)
+--   docs/migracao-2026-08/01-ajustes-caixa-colunas.sql
+--   docs/migracao-2026-08/02-allowlist-rls.sql        (pré-req: consulta 0.9)
+--   docs/migracao-2026-08/03-trigger-dupla-aprovacao.sql
+--   docs/migracao-2026-08/04-backfill-a-receber.sql   (pré-req: conferir 0.5)
+--   docs/migracao-2026-08/04b-corrige-mes-ano-csv.sql (pular se 0.8 vazio)
+--   docs/migracao-2026-08/05-rpc-aprovar-ajuste.sql   (OBRIGATÓRIO p/ o app)
+--
+-- Ação fora do SQL (painel do Supabase): Authentication → Sign In /
+-- Providers → desativar "Allow new users to sign up".
+-- ═══════════════════════════════════════════════════════════════

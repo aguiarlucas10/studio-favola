@@ -12,13 +12,50 @@ const db = createClient(SUPABASE_URL, SUPABASE_KEY)
 // ═══════════════════════════════════════════════
 const fmt = v => (v||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
 const fmtD = d => d ? new Date(d+'T12:00:00').toLocaleDateString('pt-BR') : '—'
-const mesAtual = () => { const d=new Date(); return `01/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` }
+// Chave canônica do mês corrente no formato em memória (MM/YYYY, pós-normalizaMesAno).
+// Toda comparação com e.mes_ano/s.mes_ano usa esta chave.
+const mesAtual = () => { const d=new Date(); return `${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}` }
+// Rótulo de exibição de uma chave MM/YYYY: "agosto de 2026"
+const mesAnoLabel = mesAno => {
+  const [m,y] = String(mesAno||'').split('/').map(Number)
+  if(!m || !y) return String(mesAno||'')
+  return new Date(y, m-1, 1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'})
+}
+// Deriva o mes_ano GRAVADO NO BANCO (formato legado 01/MM/YYYY) a partir de uma
+// data ISO (YYYY-MM-DD). Cai no mês atual se a data for inválida/vazia.
+const mesAnoDeData = d => {
+  if(d && /^\d{4}-\d{2}-\d{2}/.test(d)){ const [y,m]=d.split('-'); return `01/${m}/${y}` }
+  const h = new Date()
+  return `01/${String(h.getMonth()+1).padStart(2,'0')}/${h.getFullYear()}`
+}
 const statusMap = { Pago:'bg-green','A Receber':'bg-amber','A Pagar':'bg-amber',Atrasado:'bg-red',Ativo:'bg-green',Finalizado:'bg-gray',Pausado:'bg-amber',Proposta:'bg-blue',Descontinuado:'bg-gray','A receber':'bg-amber','Inadimplência':'bg-red' }
 // Escapa texto vindo do banco/CSV antes de inserir via innerHTML (previne XSS)
 const esc = v => String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')
 const badge = (t,c) => `<span class="badge ${statusMap[t]||c||'bg-gray'}">${esc(t||'—')}</span>`
 const contaBadge = c => c==='jurídica'?`<span class="badge bg-blue">PJ</span>`:`<span class="badge bg-oat">PF</span>`
 const g = id => document.getElementById(id)?.value
+// Compara valores monetários com tolerância de 1 centavo (nunca === entre floats)
+const aprox = (a,b) => Math.abs((a||0)-(b||0)) < 0.01
+
+// Guarda de duplo clique: envolve um save assíncrono — cliques repetidos
+// enquanto a gravação anterior não terminou são ignorados, e o botão (se
+// existir) fica desabilitado como feedback. Uso: saveX = travaDuplo(saveX)
+function travaDuplo(fn, btnId='modal-save-btn'){
+  let rodando = false
+  const btnEl = () => btnId ? document.getElementById(btnId) : null
+  return async function(...args){
+    if(rodando) return
+    rodando = true
+    const btn = btnEl()
+    if(btn) btn.disabled = true
+    try { return await fn.apply(this, args) }
+    finally {
+      rodando = false
+      const b = btnEl()
+      if(b) b.disabled = false
+    }
+  }
+}
 
 // Feedback flutuante on-brand (substitui alert() nativo)
 function toast(msg, type='info', ms=4500){
@@ -32,14 +69,19 @@ function toast(msg, type='info', ms=4500){
 // Traduz erros crus do Supabase/Postgres para mensagens que a sócia entende
 function friendlyError(error){
   const raw = error?.message || String(error||'')
+  // Sempre registra o erro cru — o toast resume, o console diagnostica
+  console.error('[Supabase]', error?.code||'', raw, error?.details||'', error?.hint||'')
   const map = [
     [/row-level security/i, 'Você não tem permissão para fazer isso. Confirme que está logada com a conta certa.'],
     [/jwt|session|not authenticated/i, 'Sua sessão expirou. Atualize a página e faça login novamente.'],
     [/duplicate key|already exists/i, 'Já existe um registro com esses dados.'],
+    // FK em DELETE vem antes da regra genérica: a causa é o oposto (há registros DEMAIS)
+    [/update or delete on table .* violates foreign key/i, 'Não é possível apagar: ainda existem lançamentos vinculados a este registro. Apague ou desvincule as entradas/saídas dele primeiro.'],
     [/foreign key|violates foreign/i, 'Não foi possível salvar: um registro relacionado não foi encontrado (ex: contrato apagado).'],
     [/network|fetch|failed to fetch/i, 'Falha de conexão. Verifique sua internet e tente novamente.'],
     [/null value in column/i, 'Faltou preencher um campo obrigatório.'],
   ]
   for(const [re,msg] of map) if(re.test(raw)) return msg
-  return 'Não foi possível concluir a ação. Tente novamente em instantes.'
+  // Erro desconhecido: mostrar o motivo resumido em vez de esconder
+  return raw ? `Não foi possível concluir: ${raw.slice(0,160)}` : 'Não foi possível concluir a ação. Tente novamente em instantes.'
 }

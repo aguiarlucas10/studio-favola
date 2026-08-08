@@ -17,7 +17,7 @@ function renderDashboard(){
   const {entradas:rec} = calcFluxoMesAtual()
   const rtP = R.filter(r=>r.status==='A receber').reduce((a,r)=>a+(r.a_receber||0),0)
   const ativ = P.filter(p=>p.status==='Ativo').length
-  const totalAreceber = P.reduce((a,p)=>a+(p.a_receber||0),0)
+  const totalAreceber = P.reduce((a,p)=>a+contratoAReceber(p),0)
 
   // KPIs
   document.getElementById('dash-kpis').innerHTML = `
@@ -73,16 +73,16 @@ function renderDashboard(){
   document.getElementById('dash-chart-wrap').innerHTML =
     `<svg width="100%" viewBox="0 0 ${totalW} ${h}" style="display:block">${gridLines}<line x1="${padL}" y1="${padT}" x2="${padL}" y2="${h-padB}" stroke="#DDD9D0" stroke-width="1"/>${rects}${labels}</svg>`
 
-  // Projetos a Receber
-  const comReceber = P.filter(p=>(p.a_receber||0)>0).sort((a,b)=>(b.a_receber||0)-(a.a_receber||0)).slice(0,10)
+  // Projetos a Receber (a_receber = soma das parcelas pendentes)
+  const comReceber = P.map(p=>({p, ar:contratoAReceber(p)})).filter(x=>x.ar>0).sort((a,b)=>b.ar-a.ar).slice(0,10)
   document.getElementById('dash-proj-receber').innerHTML = comReceber.length
-    ? comReceber.map(p=>`<div class="row-item" style="padding:8px 0">
+    ? comReceber.map(({p, ar})=>`<div class="row-item" style="padding:8px 0">
         <div style="min-width:0;flex:1;padding-right:8px">
           <div class="row-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.nome_contrato)}</div>
           <div class="row-sub">${esc(p.cliente)} · ${badge(p.status)}</div>
         </div>
         <div style="text-align:right;white-space:nowrap">
-          <div style="font-family:'Libre Baskerville',serif;font-size:13px;color:var(--amber)">${fmt(p.a_receber)}</div>
+          <div style="font-family:'Libre Baskerville',serif;font-size:13px;color:var(--amber)">${fmt(ar)}</div>
           ${contaBadge(p.conta)}
         </div>
       </div>`).join('')
@@ -104,10 +104,12 @@ function renderDashboard(){
 
   // A Receber por tipo de serviço
   const tiposServico = {}
-  P.filter(p=>(p.a_receber||0)>0).forEach(p=>{
+  P.forEach(p=>{
+    const ar = contratoAReceber(p)
+    if(ar<=0) return
     const tipo = p.servico || 'Outros'
     if(!tiposServico[tipo]) tiposServico[tipo] = {total:0, projetos:[]}
-    tiposServico[tipo].total += p.a_receber||0
+    tiposServico[tipo].total += ar
     tiposServico[tipo].projetos.push(p)
   })
   // Também agrega RT a receber como categoria
@@ -137,9 +139,10 @@ function renderDashboard(){
          </div>`
     : '<div class="empty" style="padding:20px">Nenhum valor a receber</div>'
 
-  // Custos próximos 30 dias — lista
-  const hoje = new Date()
-  const em30 = new Date(); em30.setDate(hoje.getDate()+30)
+  // Custos próximos 30 dias — lista. Janela em dias CHEIOS: sem zerar as horas,
+  // depois do meio-dia o vencimento de hoje (parseado como T12:00) saía da lista.
+  const hoje = new Date(); hoje.setHours(0,0,0,0)
+  const em30 = new Date(); em30.setDate(em30.getDate()+30); em30.setHours(23,59,59,999)
   const custos30 = S.filter(s=>{
     if(!s.data_pagamento) return false
     const d = new Date(s.data_pagamento+'T12:00:00')
@@ -228,7 +231,7 @@ function openContaModal(id=null){
     <div class="modal-actions">
       ${c?`<button class="btn-delete" onclick="deleteConta(${c.id})">🗑 Apagar</button>`:''}
       <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
-      <button class="btn-save" onclick="saveConta(${c?.id||'null'})">Salvar</button>
+      <button class="btn-save" id="modal-save-btn" onclick="saveConta(${c?.id||'null'})">Salvar</button>
     </div>`
   document.getElementById('modal-overlay').classList.add('open')
   if(c) setTimeout(()=>{
@@ -264,6 +267,7 @@ async function deleteConta(id){
     else toast(friendlyError(error), 'error', 6000)
   })
 }
+saveConta = travaDuplo(saveConta)
 
 function dashDetail(type){
   const panel = document.getElementById('dash-detail-panel')
@@ -276,18 +280,19 @@ function dashDetail(type){
     title.textContent = 'Projetos Ativos'
     const ativos = P.filter(p=>p.status==='Ativo')
     body.innerHTML = `<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">${ativos.map(p=>{
-      const pct = p.valor_contrato ? Math.round(((p.valor_contrato-(p.a_receber||0))/p.valor_contrato)*100) : 0
+      const ar = contratoAReceber(p)
+      const pct = p.valor_contrato ? Math.round(((p.valor_contrato-ar)/p.valor_contrato)*100) : 0
       return `<div style="border:1px solid var(--border);border-radius:3px;padding:14px;cursor:pointer" onclick="editItem('projeto',${p.id})">
         <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:12px;font-weight:600">${esc(p.nome_contrato)}</span>${contaBadge(p.conta)}</div>
         <div style="font-size:11px;color:var(--warm-gray);margin-bottom:8px">${esc(p.cliente)}</div>
-        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="color:var(--warm-gray)">A receber</span><span style="font-family:'Libre Baskerville',serif;color:var(--amber)">${fmt(p.a_receber||0)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:11px;margin-bottom:3px"><span style="color:var(--warm-gray)">A receber</span><span style="font-family:'Libre Baskerville',serif;color:var(--amber)">${fmt(ar)}</span></div>
         <div class="prog"><div class="prog-fill" style="width:${pct}%"></div></div>
         <div style="font-size:9px;color:var(--warm-gray);margin-top:2px">${pct}% recebido · ${esc(p.cidade||'')}</div>
       </div>`}).join('')}</div>`
   } else if(type==='areceber'){
     title.textContent = 'A Receber — Todos os Projetos'
-    const com = P.filter(p=>(p.a_receber||0)>0).sort((a,b)=>(b.a_receber||0)-(a.a_receber||0))
-    body.innerHTML = `<table style="width:100%;border-collapse:collapse">${com.map(p=>`<tr style="border-bottom:1px solid var(--bg)"><td style="padding:9px 0;font-weight:600;font-size:12px">${esc(p.nome_contrato)}</td><td style="color:var(--warm-gray);font-size:11px">${esc(p.cliente)}</td><td>${badge(p.status)}</td><td>${contaBadge(p.conta)}</td><td style="text-align:right;font-family:'Libre Baskerville',serif;color:var(--amber)">${fmt(p.a_receber)}</td></tr>`).join('')}</table>`
+    const com = P.map(p=>({p, ar:contratoAReceber(p)})).filter(x=>x.ar>0).sort((a,b)=>b.ar-a.ar)
+    body.innerHTML = `<table style="width:100%;border-collapse:collapse">${com.map(({p, ar})=>`<tr style="border-bottom:1px solid var(--bg)"><td style="padding:9px 0;font-weight:600;font-size:12px">${esc(p.nome_contrato)}</td><td style="color:var(--warm-gray);font-size:11px">${esc(p.cliente)}</td><td>${badge(p.status)}</td><td>${contaBadge(p.conta)}</td><td style="text-align:right;font-family:'Libre Baskerville',serif;color:var(--amber)">${fmt(ar)}</td></tr>`).join('')}</table>`
   } else if(type==='receita'){
     title.textContent = 'Entradas do Mês Atual'
     const mes = mesAtual()

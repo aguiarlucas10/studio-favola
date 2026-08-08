@@ -6,8 +6,11 @@ let finFilter='entradas'
 const finExpandido = new Set()   // grupos de contrato expandidos (A receber)
 let finEspelhosVisiveis = false  // bloco de espelhos [TD] recolhido por padrão
 
-// Espelho automático = saída [TD] gerada quando um pagamento cai na conta PF
-const isEspelho = s => (s.descricao||'').trim().toUpperCase().startsWith('[TD]')
+// Espelho automático = saída [TD] gerada quando um pagamento cai na conta PF.
+// Reconhece também os legados sem colchetes: "TD Contrato X", "TD RT X".
+// Usada só para EXIBIR (mover para o bloco recolhível de espelhos); as
+// automações que alteram/apagam usam encontraEspelhos(), bem mais restrita.
+const isEspelho = s => /^(\[TD\]|TD\s)/i.test((s.descricao||'').trim())
 const isPago = r => r.status==='Pago'
 
 function filterFin(f,btn){
@@ -22,11 +25,17 @@ function filterFin(f,btn){
   else renderFinanceiro()
 }
 
-function toggleFinGrupo(encoded){
-  const key = decodeURIComponent(encoded)
+// Expansão dos grupos de parcelas por event delegation com data-attribute.
+// (Antes era onclick inline com o nome do contrato interpolado em contexto JS
+// — encodeURIComponent não escapa aspas simples, um nome malicioso executava
+// código. Como atributo HTML escapado por esc(), o dado é inerte.)
+document.getElementById('fin-entradas-wrap')?.addEventListener('click', ev => {
+  const tr = ev.target.closest('tr[data-grupo]')
+  if(!tr || ev.target.closest('input,button')) return
+  const key = tr.dataset.grupo
   if(finExpandido.has(key)) finExpandido.delete(key); else finExpandido.add(key)
   renderFinanceiro()
-}
+})
 function toggleFinEspelhos(){
   finEspelhosVisiveis = !finEspelhosVisiveis
   renderFinanceiro()
@@ -80,7 +89,7 @@ function tabelaAReceber(rows){
       const somaG = itens.reduce((a,e)=>a+(e.valor||0),0)
       const prox = itens.map(e=>e.data_pagamento).filter(Boolean).sort()[0]
       const aberto = finExpandido.has(key)
-      body += `<tr style="background:var(--bg);cursor:pointer" onclick="toggleFinGrupo('${encodeURIComponent(key)}')">
+      body += `<tr style="background:var(--bg);cursor:pointer" data-grupo="${esc(key)}">
         <td style="text-align:center;color:var(--warm-gray)">${aberto?'▾':'▸'}</td>
         <td class="td-muted">próx: ${fmtD(prox)}</td>
         <td class="td-bold">${esc(itens[0].nome_contrato)}</td>
@@ -153,10 +162,10 @@ function renderFinanceiro(){
   const Ef = mesSelecionado ? E.filter(e=>e.mes_ano===mesSelecionado) : E
   const Sf = mesSelecionado ? S.filter(s=>s.mes_ano===mesSelecionado) : S
 
-  // ENTRADAS — Recebido (realizado) e A receber (previsto)
+  // ENTRADAS — A receber (previsto) primeiro, Recebido (realizado) depois
   const recebido  = Ef.filter(isPago)
   const aReceber  = Ef.filter(e=>!isPago(e))
-  const entradasHTML = (tabelaRecebido(recebido) + tabelaAReceber(aReceber))
+  const entradasHTML = (tabelaAReceber(aReceber) + tabelaRecebido(recebido))
     || '<div class="empty">Nenhuma entrada</div>'
   document.getElementById('fin-entradas-wrap').innerHTML = entradasHTML
 
@@ -165,7 +174,7 @@ function renderFinanceiro(){
   const espelhos    = Sf.filter(isEspelho)
   const pagas    = saidasReais.filter(isPago)
   const aPagar   = saidasReais.filter(s=>!isPago(s))
-  let saidasHTML = (tabelaSaidas('Pago', pagas, 'var(--red)') + tabelaSaidas('A pagar', aPagar, 'var(--amber)'))
+  let saidasHTML = (tabelaSaidas('A pagar', aPagar, 'var(--amber)') + tabelaSaidas('Pago', pagas, 'var(--red)'))
     || '<div class="empty">Nenhuma saída</div>'
   if(espelhos.length){
     const totalEsp = espelhos.reduce((a,s)=>a+(s.valor||0),0)

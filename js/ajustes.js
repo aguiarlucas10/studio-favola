@@ -15,14 +15,12 @@ function checkAjustePendente(){
   if(!banner) return
   if(!pendente){ banner.style.display='none'; return }
 
-  // Identidade por ID autenticado; fallback por nome só para registros antigos sem ID
-  const jaSolicitou = pendente.solicitado_por_id
-    ? pendente.solicitado_por_id === currentUserId
-    : !!(pendente.solicitado_por && currentUserName.toLowerCase().includes(pendente.solicitado_por.toLowerCase()))
-  const jaAprovou = pendente.aprovado_por_id
-    ? pendente.aprovado_por_id === currentUserId
-    : !!(pendente.aprovado_por && currentUserName.toLowerCase().includes(pendente.aprovado_por.toLowerCase()))
-  const podeAprovar = !jaSolicitou && !jaAprovou
+  // Identidade SÓ por ID autenticado (nome de exibição é editável — não serve
+  // como prova). Pedido antigo sem ID não é aprovável: só rejeitar e refazer.
+  const temId = !!pendente.solicitado_por_id
+  const jaSolicitou = temId && pendente.solicitado_por_id === currentUserId
+  const jaAprovou = !!pendente.aprovado_por_id && pendente.aprovado_por_id === currentUserId
+  const podeAprovar = temId && !jaSolicitou && !jaAprovou
 
   banner.style.display = 'flex'
   banner.innerHTML = `
@@ -37,7 +35,10 @@ function checkAjustePendente(){
       ${podeAprovar
         ? `<button onclick="responderAjuste(${pendente.id},'aprovado')" style="padding:6px 14px;background:var(--emerald);color:#fff;border:none;border-radius:3px;font-family:'Spartan',sans-serif;font-size:10px;letter-spacing:.08em;cursor:pointer">✓ APROVAR</button>
            <button onclick="responderAjuste(${pendente.id},'rejeitado')" style="padding:6px 14px;background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:3px;font-family:'Spartan',sans-serif;font-size:10px;cursor:pointer">✕ REJEITAR</button>`
-        : `<span style="font-size:10px;opacity:.7;padding:6px 0">${jaSolicitou ? 'Você solicitou · aguardando a outra sócia' : 'Você já aprovou · aguardando outra aprovação'}</span>`
+        : !temId
+          ? `<span style="font-size:10px;opacity:.7;padding:6px 0">Pedido antigo sem identificação — rejeite e solicite de novo</span>
+             <button onclick="responderAjuste(${pendente.id},'rejeitado')" style="padding:6px 14px;background:transparent;color:#fff;border:1px solid rgba(255,255,255,.4);border-radius:3px;font-family:'Spartan',sans-serif;font-size:10px;cursor:pointer">✕ REJEITAR</button>`
+          : `<span style="font-size:10px;opacity:.7;padding:6px 0">${jaSolicitou ? 'Você solicitou · aguardando a outra sócia' : 'Você já aprovou · aguardando outra aprovação'}</span>`
       }
       <button onclick="verDetalheAjuste(${pendente.id})" style="padding:6px 10px;background:transparent;color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:3px;font-family:'Spartan',sans-serif;font-size:10px;cursor:pointer">Detalhes</button>
     </div>`
@@ -122,38 +123,22 @@ async function responderAjuste(id, decisao){
     return
   }
 
-  // Aprovado — aplica o ajuste no banco
-  const { diferenca, valor_novo, motivo, data_referencia } = ajuste
-  const data = data_referencia || new Date().toISOString().slice(0,10)
-  const mes = mesAnoDeData(data)
-
-  let errAjuste
-  if(diferenca > 0){
-    const r = await db.from('entradas').insert({
-      nome_contrato: null, cliente: null, tipo_entrada: 'ajuste de caixa',
-      valor: diferenca, data_pagamento: data, conta: 'jurídica',
-      forma_pagto: 'Ajuste', status: 'Pago', mes_ano: mes,
-      obs: `[Ajuste de Caixa] ${motivo||''} · aprovado por ${ajuste.solicitado_por} e ${currentUserName}`
-    })
-    errAjuste = r.error
-  } else {
-    const r = await db.from('saidas').insert({
-      tipo_saida: 'ajuste de caixa', descricao: `[Ajuste de Caixa] ${motivo||'Conciliação'}`,
-      valor: Math.abs(diferenca), data_pagamento: data, conta: 'jurídica',
-      socia: 'Ambas', status: 'Pago', mes_ano: mes,
-      obs: `Aprovado por ${ajuste.solicitado_por} e ${currentUserName}`
-    })
-    errAjuste = r.error
+  // Pedido legado sem identificação do solicitante não é aprovável pelo app
+  if(!ajuste.solicitado_por_id){
+    toast('Este pedido é antigo e não identifica quem solicitou. Rejeite-o e crie um novo ajuste.', 'error', 7000)
+    return
   }
-  if(errAjuste){ toast(friendlyError(errAjuste), 'error', 6000); return }
 
-  // Marca como aprovado
-  await db.from('ajustes_caixa').update({ status:'aprovado', aprovado_por: currentUserName, aprovado_por_id: currentUserId, updated_at: new Date().toISOString() }).eq('id',id)
+  // Aprovação ATÔMICA no banco: a RPC valida (pendente, aprovador ≠ solicitante),
+  // lança a entrada/saída de conciliação e marca aprovado na mesma transação —
+  // nunca aplica duas vezes nem aprova sem lançar (docs/migracao-2026-08.sql, Seção 5).
+  const { error } = await db.rpc('aprovar_ajuste', { p_id: id })
+  if(error){ toast(friendlyError(error), 'error', 7000); return }
 
   await loadData(); await loadAjustes()
   renderDashboard(); checkAjustePendente()
 
-  toast(`✓ Ajuste aprovado e aplicado · novo caixa ${fmt(valor_novo)}`, 'success', 5000)
+  toast(`✓ Ajuste aprovado e aplicado · novo caixa ${fmt(ajuste.valor_novo)}`, 'success', 5000)
 }
 
 function verDetalheAjuste(id){

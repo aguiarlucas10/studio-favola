@@ -55,13 +55,18 @@ async function bulkUpdateStatus(){
   const newStatus = document.getElementById('bulk-status-val').value
   if(!sel.length || !newStatus) return
   const tables = [...new Set(sel.map(s=>s.table))]
+  // Entradas PF quitadas em massa precisam ganhar a saída-espelho [TD]
+  const quitadasPF = newStatus==='Pago'
+    ? sel.filter(s=>s.table==='entradas')
+        .map(s=>E.find(e=>e.id===s.id))
+        .filter(e=>e && e.status!=='Pago' && (e.conta==='pessoal'||e.conta==='PF'))
+    : []
   for(const tbl of tables){
     const ids = sel.filter(s=>s.table===tbl).map(s=>s.id)
-    // Detect the correct status field per table
-    const field = tbl==='contratos' ? 'status' : tbl==='rt_comissoes' ? 'status' : 'status'
-    const {error} = await db.from(tbl).update({[field]:newStatus}).in('id',ids)
+    const {error} = await db.from(tbl).update({status:newStatus}).in('id',ids)
     if(error){ toast(friendlyError(error), 'error', 6000); return }
   }
+  for(const e of quitadasPF) await garanteEspelhoTD(e)
   clearSelection()
   await loadData()
   tables.forEach(tbl=>reRender[tbl]?.())

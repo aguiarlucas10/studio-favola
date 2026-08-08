@@ -320,6 +320,43 @@ async function saveProjeto(id){
   await executa()
 }
 
+// ═══════════════════════════════════════════════
+// ESPELHOS [TD] — contrapeso contábil de pagamento na conta PF
+// ═══════════════════════════════════════════════
+// Localiza as saídas-espelho de uma entrada PF. Casa por CONTEÚDO (nome do
+// contrato no vínculo ou na descrição + valor aproximado + mesma data), não
+// por descrição exata — reconhece os legados "TD Contrato X" sem colchetes
+// e evita criar espelho duplicado ao lado de um legado.
+function encontraEspelhos(e){
+  const nome = e.nome_contrato || ''
+  return S.filter(s => isEspelho(s)
+    && (nome
+      ? ((s.nome_contrato && s.nome_contrato===nome) || (s.descricao||'').includes(nome))
+      : !s.nome_contrato)
+    && aprox(s.valor, e.valor)
+    && s.data_pagamento === e.data_pagamento)
+}
+
+// Garante o espelho [TD] de uma entrada PF PAGA: se já existe um pendente,
+// marca como Pago; se não existe, cria já como Pago (o dinheiro entrou).
+async function garanteEspelhoTD(e){
+  const [espelho] = encontraEspelhos(e)
+  if(espelho){
+    if(espelho.status !== 'Pago'){
+      const {error} = await db.from('saidas').update({status:'Pago'}).eq('id', espelho.id)
+      if(error) toast('O espelho [TD] não foi atualizado: '+friendlyError(error), 'error', 6000)
+    }
+    return
+  }
+  const {error} = await db.from('saidas').insert({
+    tipo_saida:'retirada de lucros', descricao:`[TD] ${e.nome_contrato||''}`.trim(),
+    valor:e.valor, data_pagamento:e.data_pagamento, conta:'pessoal', socia:'Ambas',
+    status:'Pago', mes_ano:e.mes_ano,
+    contrato_id:e.contrato_id||null, nome_contrato:e.nome_contrato||null
+  })
+  if(error) toast('O espelho [TD] não foi criado: '+friendlyError(error), 'error', 6000)
+}
+
 async function saveEntrada(id){
   const nomeContrato = g('m-cont') || ''
   const proj = P.find(p=>p.nome_contrato===nomeContrato)
@@ -329,6 +366,8 @@ async function saveEntrada(id){
   const mes = mesAnoDeData(data)
   const status = g('m-status')
   const isPF = conta==='pessoal' || conta==='PF'
+  // Estado anterior ANTES de gravar, para detectar a quitação
+  const anterior = id ? E.find(x=>x.id===id) : null
 
   const payload = {
     contrato_id:proj?.id||null, nome_contrato:nomeContrato, cliente:proj?.cliente||'',
@@ -342,17 +381,25 @@ async function saveEntrada(id){
 
   if(error){ toast(friendlyError(error), 'error', 6000); return }
 
-  // Se PF e é nova entrada, cria saída [TD] automaticamente
-  if(isPF && !id){
-    const descricaoTD = `[TD] ${nomeContrato}`
-    const jaExiste = S.some(s=>s.descricao===descricaoTD && s.valor===valor && s.data_pagamento===data)
-    if(!jaExiste){
-      await db.from('saidas').insert({
-        tipo_saida:'retirada de lucros', descricao:descricaoTD,
-        valor, data_pagamento:data, conta:'pessoal', socia:'Ambas',
-        status, mes_ano:mes,
-        contrato_id:proj?.id||null, nome_contrato:nomeContrato
-      })
+  // O espelho [TD] nasce quando o dinheiro ENTRA na conta PF: entrada nova já
+  // Paga, ou edição que quita (A Receber/Atrasado → Pago). Parcela PF apenas
+  // prevista não gera espelho antecipado.
+  const ficouPago = status==='Pago' && (!id || (anterior && anterior.status!=='Pago'))
+  if(isPF && ficouPago){
+    await garanteEspelhoTD({nome_contrato:nomeContrato, valor, data_pagamento:data,
+                            mes_ano:mes, contrato_id:proj?.id||null})
+  }
+  // Edição de entrada PF que JÁ era paga: acompanha o espelho se casar 1:1
+  else if(isPF && id && anterior && anterior.status==='Pago' && status==='Pago'
+          && (!aprox(anterior.valor, valor) || anterior.data_pagamento!==data)){
+    const cands = encontraEspelhos(anterior)
+    if(cands.length===1){
+      const {error:e2} = await db.from('saidas')
+        .update({valor, data_pagamento:data, mes_ano:mes}).eq('id',cands[0].id)
+      if(e2) toast('O espelho [TD] não acompanhou a edição: '+friendlyError(e2), 'error', 6000)
+      else toast('O espelho [TD] foi atualizado junto.', 'info')
+    } else {
+      toast('Entrada alterada — confira o espelho [TD] correspondente na aba Saídas.', 'info', 6000)
     }
   }
 
@@ -414,7 +461,7 @@ async function saveRT(id){
   if(isPF && ficouPago && nomeContrato){
     const mes = mesAnoDeData(data)
     const descricaoTD = `[TD] ${nomeContrato}`
-    const jaExiste = S.some(s=>s.descricao===descricaoTD && Math.abs((s.valor||0)-vr)<0.01 && s.data_pagamento===data)
+    const jaExiste = encontraEspelhos({nome_contrato:nomeContrato, valor:vr, data_pagamento:data}).length > 0
     if(!jaExiste){
       // Entrada RT
       await db.from('entradas').insert({
@@ -453,14 +500,29 @@ const reRender = { contratos:()=>renderProjetos(), entradas:()=>renderFinanceiro
 
 function deleteItem(type, id){
   const label = {projeto:'este projeto',entrada:'esta entrada',saida:'esta saída',rt:'esta RT'}[type]||'este registro'
+  let msg = 'Esta ação remove o registro permanentemente do banco de dados e não pode ser desfeita.'
+  // Entrada PF: o espelho [TD] correspondente sai junto quando casa 1:1
+  let espelhoJunto = null
+  if(type==='entrada'){
+    const e = E.find(x=>x.id===id)
+    if(e && (e.conta==='pessoal'||e.conta==='PF')){
+      const esps = encontraEspelhos(e)
+      if(esps.length===1){ espelhoJunto = esps[0]; msg += ' A saída-espelho [TD] correspondente será apagada junto.' }
+      else if(esps.length>1){ msg += ' Há mais de uma saída [TD] parecida — confira os espelhos na aba Saídas depois.' }
+    }
+  }
   confirmDialog(
     `Apagar ${label}?`,
-    'Esta ação remove o registro permanentemente do banco de dados e não pode ser desfeita.',
+    msg,
     async ()=>{
       const tbl = tableMap[type]
       const {error} = await db.from(tbl).delete().eq('id',id)
-      if(!error){ closeModal(); await loadData(); reRender[tbl]?.() }
-      else toast(friendlyError(error), 'error', 6000)
+      if(error){ toast(friendlyError(error), 'error', 6000); return }
+      if(espelhoJunto){
+        const {error:e2} = await db.from('saidas').delete().eq('id',espelhoJunto.id)
+        if(e2) toast('Entrada apagada, mas o espelho [TD] não: '+friendlyError(e2), 'error', 6000)
+      }
+      closeModal(); await loadData(); reRender[tbl]?.()
     }
   )
 }

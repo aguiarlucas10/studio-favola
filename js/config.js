@@ -34,6 +34,8 @@ const esc = v => String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;')
 const badge = (t,c) => `<span class="badge ${statusMap[t]||c||'bg-gray'}">${esc(t||'—')}</span>`
 const contaBadge = c => c==='jurídica'?`<span class="badge bg-blue">PJ</span>`:`<span class="badge bg-oat">PF</span>`
 const g = id => document.getElementById(id)?.value
+// Compara valores monetários com tolerância de 1 centavo (nunca === entre floats)
+const aprox = (a,b) => Math.abs((a||0)-(b||0)) < 0.01
 
 // Feedback flutuante on-brand (substitui alert() nativo)
 function toast(msg, type='info', ms=4500){

@@ -6,8 +6,9 @@ let finFilter='entradas'
 const finExpandido = new Set()   // grupos de contrato expandidos (A receber)
 let finEspelhosVisiveis = false  // bloco de espelhos [TD] recolhido por padrão
 
-// Espelho automático = saída [TD] gerada quando um pagamento cai na conta PF
-const isEspelho = s => (s.descricao||'').trim().toUpperCase().startsWith('[TD]')
+// Espelho automático = saída [TD] gerada quando um pagamento cai na conta PF.
+// Reconhece também os legados sem colchetes: "TD Contrato X", "TD RT X".
+const isEspelho = s => /^(\[TD\]|TD\s)/i.test((s.descricao||'').trim())
 const isPago = r => r.status==='Pago'
 
 function filterFin(f,btn){
